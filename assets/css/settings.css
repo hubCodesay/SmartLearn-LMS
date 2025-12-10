@@ -1,0 +1,378 @@
+/* Settings Page Styles */
+
+.smartlearn-lms-settings-wrap {
+	max-width: 100%;
+	margin: 20px 20px 20px 0;
+}
+
+.smartlearn-lms-settings-wrap h1 {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	font-size: 28px;
+	margin-bottom: 30px;
+}
+
+.smartlearn-lms-settings-wrap h1 .dashicons {
+	font-size: 32px;
+	width: 32px;
+	height: 32px;
+	color: #2271b1;
+}
+
+.smartlearn-lms-settings-container {
+	display: grid;
+	grid-template-columns: 1fr 380px;
+	gap: 20px;
+}
+
+/* Cards */
+.smartlearn-lms-card {
+	background: #fff;
+	border: 1px solid #ccd0d4;
+	border-radius: 8px;
+	padding: 25px;
+	margin-bottom: 20px;
+	box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+}
+
+.smartlearn-lms-card h2,
+.smartlearn-lms-card h3 {
+	margin-top: 0;
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	font-size: 18px;
+}
+
+.smartlearn-lms-card h2 {
+	font-size: 20px;
+	padding-bottom: 15px;
+	border-bottom: 1px solid #f0f0f1;
+	margin-bottom: 20px;
+}
+
+/* About Card */
+.smartlearn-about {
+	text-align: center;
+}
+
+.smartlearn-logo {
+	margin: 0 auto 15px;
+	width: 80px;
+	height: 80px;
+	background: linear-gradient(135deg, #2271b1, #135e96);
+	border-radius: 50%;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+}
+
+.smartlearn-logo .dashicons {
+	font-size: 48px;
+	width: 48px;
+	height: 48px;
+	color: #fff;
+}
+
+.smartlearn-about h3 {
+	font-size: 22px;
+	margin: 15px 0 5px;
+	justify-content: center;
+}
+
+.smartlearn-about .version {
+	color: #646970;
+	font-size: 13px;
+	margin-bottom: 15px;
+}
+
+.smartlearn-stats {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 15px;
+	margin-top: 20px;
+	padding-top: 20px;
+	border-top: 1px solid #f0f0f1;
+}
+
+.stat-item {
+	text-align: center;
+}
+
+.stat-number {
+	display: block;
+	font-size: 32px;
+	font-weight: 600;
+	color: #2271b1;
+	line-height: 1;
+}
+
+.stat-label {
+	display: block;
+	font-size: 13px;
+	color: #646970;
+	margin-top: 5px;
+}
+
+/* Donate Card */
+.smartlearn-donate h3 {
+	justify-content: center;
+}
+
+.donate-buttons {
+	text-align: center;
+	margin: 20px 0;
+}
+
+.donate-button {
+	display: inline-flex !important;
+	align-items: center;
+	gap: 8px;
+	margin-bottom: 20px;
+	padding: 12px 24px !important;
+	height: auto !important;
+	font-size: 14px !important;
+}
+
+.donate-button .dashicons {
+	font-size: 20px;
+	width: 20px;
+	height: 20px;
+}
+
+.crypto-donate {
+	text-align: left;
+	background: #f6f7f7;
+	padding: 15px;
+	border-radius: 6px;
+	margin-top: 15px;
+}
+
+.crypto-item {
+	margin-bottom: 15px;
+	padding-bottom: 15px;
+	border-bottom: 1px solid #dcdcde;
+}
+
+.crypto-item:last-child {
+	margin-bottom: 0;
+	padding-bottom: 0;
+	border-bottom: none;
+}
+
+.crypto-item strong {
+	display: block;
+	margin-bottom: 5px;
+	color: #1d2327;
+}
+
+.crypto-address {
+	display: block;
+	background: #fff;
+	padding: 8px 10px;
+	border: 1px solid #dcdcde;
+	border-radius: 4px;
+	font-size: 11px;
+	word-break: break-all;
+	margin-bottom: 8px;
+	font-family: 'Courier New', monospace;
+}
+
+.copy-crypto {
+	width: 100%;
+}
+
+.thank-you {
+	text-align: center;
+	margin-top: 20px;
+	padding-top: 20px;
+	border-top: 1px solid #f0f0f1;
+	color: #2271b1;
+	font-weight: 600;
+}
+
+.thank-you .dashicons {
+	color: #d63638;
+}
+
+/* Stabion Card */
+.smartlearn-stabion {
+	text-align: center;
+	background: linear-gradient(135deg, #f6f7f7, #ffffff);
+}
+
+.stabion-links {
+	display: flex;
+	gap: 10px;
+	justify-content: center;
+	margin-top: 15px;
+}
+
+.stabion-links .button {
+	display: inline-flex;
+	align-items: center;
+	gap: 5px;
+}
+
+/* Instructions */
+.smartlearn-instructions h3 {
+	font-size: 16px;
+	margin: 25px 0 10px;
+	color: #2271b1;
+}
+
+.smartlearn-instructions h3:first-child {
+	margin-top: 0;
+}
+
+.smartlearn-instructions h4 {
+	font-size: 14px;
+	margin: 20px 0 10px;
+	color: #1d2327;
+}
+
+.smartlearn-instructions ol,
+.smartlearn-instructions ul {
+	margin-left: 20px;
+}
+
+.smartlearn-instructions li {
+	margin-bottom: 8px;
+	line-height: 1.6;
+}
+
+.smartlearn-code-block {
+	background: #f6f7f7;
+	border: 1px solid #dcdcde;
+	border-radius: 4px;
+	padding: 10px 12px;
+	margin: 10px 0;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 10px;
+}
+
+.smartlearn-code-block code {
+	background: transparent;
+	padding: 0;
+	font-size: 13px;
+	color: #d63638;
+	flex: 1;
+}
+
+.smartlearn-params-list {
+	list-style: none;
+	margin-left: 0;
+}
+
+.smartlearn-params-list > li {
+	margin-bottom: 15px;
+	padding-left: 0;
+}
+
+.smartlearn-params-list strong {
+	color: #2271b1;
+	font-family: 'Courier New', monospace;
+}
+
+.smartlearn-css-list {
+	list-style: none;
+	margin-left: 0;
+}
+
+.smartlearn-css-list li {
+	padding-left: 0;
+	margin-bottom: 8px;
+}
+
+.smartlearn-css-list code {
+	background: #f6f7f7;
+	padding: 3px 8px;
+	border-radius: 3px;
+	font-size: 13px;
+	color: #d63638;
+}
+
+/* Links List */
+.smartlearn-links-list {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+}
+
+.smartlearn-links-list li {
+	margin: 0;
+	padding: 0;
+}
+
+.smartlearn-links-list a {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 10px;
+	text-decoration: none;
+	color: #2271b1;
+	border-radius: 4px;
+	transition: background 0.2s ease;
+}
+
+.smartlearn-links-list a:hover {
+	background: #f6f7f7;
+}
+
+.smartlearn-links-list .dashicons {
+	font-size: 18px;
+	width: 18px;
+	height: 18px;
+}
+
+/* Form Styles */
+.form-table th {
+	padding: 20px 10px 20px 0;
+	font-weight: 600;
+}
+
+.form-table td {
+	padding: 20px 10px;
+}
+
+/* Responsive */
+@media (max-width: 1280px) {
+	.smartlearn-lms-settings-container {
+		grid-template-columns: 1fr 320px;
+	}
+}
+
+@media (max-width: 1024px) {
+	.smartlearn-lms-settings-container {
+		grid-template-columns: 1fr;
+	}
+	
+	.smartlearn-lms-settings-sidebar {
+		display: grid;
+		grid-template-columns: repeat(2, 1fr);
+		gap: 20px;
+	}
+}
+
+@media (max-width: 782px) {
+	.smartlearn-lms-settings-wrap {
+		margin: 10px 10px 10px 0;
+	}
+	
+	.smartlearn-lms-settings-sidebar {
+		grid-template-columns: 1fr;
+	}
+	
+	.smartlearn-code-block {
+		flex-direction: column;
+		align-items: stretch;
+	}
+	
+	.copy-shortcode,
+	.copy-crypto {
+		width: 100%;
+	}
+}

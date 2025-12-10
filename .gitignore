@@ -1,0 +1,86 @@
+# .gitignore for Sowa Courses LMS
+
+# WordPress
+wp-config.php
+wp-content/uploads/
+wp-content/blogs.dir/
+wp-content/upgrade/
+wp-content/backup-db/
+wp-content/advanced-cache.php
+wp-content/wp-cache-config.php
+wp-content/cache/
+*.log
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Linux
+*~
+.directory
+
+# IDEs
+.idea/
+.vscode/
+*.sublime-project
+*.sublime-workspace
+*.code-workspace
+.phpintel/
+nbproject/
+
+# Node
+node_modules/
+npm-debug.log
+yarn-error.log
+package-lock.json
+yarn.lock
+
+# Composer
+vendor/
+composer.lock
+
+# Build files
+*.zip
+build/
+dist/
+release/
+
+# Temporary files
+*.tmp
+*.temp
+*.swp
+*.swo
+*~
+
+# PHP
+*.cache
+.phpcs.xml
+
+# Translation files (keep .pot, ignore .mo)
+*.mo
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Testing
+tests/
+phpunit.xml
+.phpunit.result.cache
+
+# Coverage
+coverage/
+.coverage
+
+# Misc
+TODO.md
+NOTES.md
+scratch/

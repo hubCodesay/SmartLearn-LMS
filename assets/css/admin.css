@@ -1,0 +1,126 @@
+/* Admin Styles для SmartLearn LMS */
+
+/* Meta Box Styles */
+.smartlearn-meta-box {
+  padding: 10px;
+}
+
+.smartlearn-meta-field {
+  margin-bottom: 15px;
+}
+
+.smartlearn-meta-field label {
+  display: block;
+  font-weight: 600;
+  margin-bottom: 5px;
+}
+
+.smartlearn-meta-field input[type="text"],
+.smartlearn-meta-field input[type="number"],
+.smartlearn-meta-field select {
+  width: 100%;
+  max-width: 400px;
+}
+
+.smartlearn-meta-field input[type="checkbox"] {
+  margin-right: 5px;
+}
+
+.smartlearn-meta-field .description {
+  font-size: 12px;
+  color: #666;
+  margin-top: 5px;
+}
+
+/* Product Selector */
+#_product_wrapper {
+  margin-top: 10px;
+}
+
+#_product_id {
+  width: 100%;
+  max-width: 400px;
+}
+
+/* Course Lessons List */
+.smartlearn-course-lessons {
+  padding: 0;
+}
+
+.smartlearn-lessons-list-admin {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.smartlearn-lesson-item-admin {
+  padding: 10px;
+  border-bottom: 1px solid #ddd;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.smartlearn-lesson-item-admin:last-child {
+  border-bottom: none;
+}
+
+.smartlearn-lesson-item-admin .lesson-title {
+  flex: 1;
+  font-weight: 500;
+}
+
+.smartlearn-lesson-item-admin .lesson-icon {
+  margin-right: 10px;
+  font-size: 16px;
+}
+
+.smartlearn-lesson-item-admin .lesson-icon.locked {
+  color: #dc3232;
+}
+
+.smartlearn-lesson-item-admin .lesson-icon.unlocked {
+  color: #46b450;
+}
+
+.smartlearn-lesson-item-admin .lesson-actions {
+  display: flex;
+  gap: 5px;
+}
+
+.smartlearn-lesson-item-admin .lesson-actions a {
+  text-decoration: none;
+  font-size: 12px;
+}
+
+.smartlearn-add-lesson-button {
+  margin-top: 15px;
+}
+
+.smartlearn-no-lessons {
+  padding: 20px;
+  text-align: center;
+  color: #666;
+  font-style: italic;
+}
+
+/* Responsive */
+@media (max-width: 782px) {
+  .smartlearn-meta-field input[type="text"],
+  .smartlearn-meta-field input[type="number"],
+  .smartlearn-meta-field select,
+  #_product_id {
+    max-width: 100%;
+  }
+
+  .smartlearn-lesson-item-admin {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .smartlearn-lesson-item-admin .lesson-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+}
