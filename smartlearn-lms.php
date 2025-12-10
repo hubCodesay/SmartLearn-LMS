@@ -69,7 +69,20 @@ class SmartLearn_Courses_LMS {
 	}
 	
 	public function load_textdomain() {
-		load_plugin_textdomain( 'smartlearn-lms', false, dirname( plugin_basename( __FILE__ ) ) . '/languages' );
+		// Get selected language from settings
+		$selected_lang = get_option( 'smartlearn_lms_language', 'uk' );
+		
+		// Load the selected language file
+		$locale = $selected_lang . '_' . strtoupper( $selected_lang );
+		$mofile = dirname( plugin_basename( __FILE__ ) ) . '/languages/smartlearn-lms-' . $selected_lang . '.mo';
+		
+		// Try to load specific language file
+		if ( file_exists( WP_PLUGIN_DIR . '/' . $mofile ) ) {
+			load_textdomain( 'smartlearn-lms', WP_PLUGIN_DIR . '/' . $mofile );
+		} else {
+			// Fallback to default WordPress language loading
+			load_plugin_textdomain( 'smartlearn-lms', false, dirname( plugin_basename( __FILE__ ) ) . '/languages' );
+		}
 	}
 	
 	private function includes() {

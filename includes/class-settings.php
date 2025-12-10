@@ -39,6 +39,7 @@ class SmartLearn_LMS_Settings {
 		register_setting( 'smartlearn_lms_settings', 'smartlearn_lms_button_text_view' );
 		register_setting( 'smartlearn_lms_settings', 'smartlearn_lms_button_text_buy' );
 		register_setting( 'smartlearn_lms_settings', 'smartlearn_lms_button_text_login' );
+		register_setting( 'smartlearn_lms_settings', 'smartlearn_lms_language' );
 	}
 	
 	/**
@@ -143,6 +144,37 @@ class SmartLearn_LMS_Settings {
 										</select>
 										<p class="description">
 											<?php _e( 'Кількість колонок у сітці курсів', 'smartlearn-lms' ); ?>
+										</p>
+									</td>
+								</tr>
+								
+								<tr>
+									<th scope="row">
+										<label for="smartlearn_lms_language">
+											<?php _e( 'Мова плагіна', 'smartlearn-lms' ); ?>
+										</label>
+									</th>
+									<td>
+										<select id="smartlearn_lms_language" name="smartlearn_lms_language">
+											<?php
+											$current_lang = get_option( 'smartlearn_lms_language', 'uk' );
+											$languages = array(
+												'uk' => 'Українська',
+												'ru' => 'Русский',
+												'en' => 'English'
+											);
+											foreach ( $languages as $code => $name ) {
+												printf(
+													'<option value="%s" %s>%s</option>',
+													esc_attr( $code ),
+													selected( $current_lang, $code, false ),
+													esc_html( $name )
+												);
+											}
+											?>
+										</select>
+										<p class="description">
+											<?php _e( 'Виберіть мову інтерфейсу плагіна', 'smartlearn-lms' ); ?>
 										</p>
 									</td>
 								</tr>
