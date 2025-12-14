@@ -73,7 +73,7 @@ class SmartLearn_LMS_Templates {
 			return;
 		}
 		
-		echo '<div class="-lessons-list">';
+		echo '<div class="smartlearn-lessons-list">';
 		
 		foreach ( $lessons as $lesson ) {
 			$has_access = SmartLearn_LMS_Access_Control::user_has_lesson_access( $lesson->ID, $user_id );
@@ -93,7 +93,7 @@ class SmartLearn_LMS_Templates {
 			echo '<div class="' . esc_attr( implode( ' ', $classes ) ) . '">';
 			
 			// Іконка
-			echo '<span class="-lesson-icon">';
+			echo '<span class="smartlearn-lesson-icon">';
 			if ( $has_access ) {
 				echo '✓'; // Відкритий урок
 			} else {
@@ -103,22 +103,22 @@ class SmartLearn_LMS_Templates {
 			
 			// Назва
 			if ( $has_access ) {
-				echo '<a href="' . esc_url( get_permalink( $lesson->ID ) ) . '" class="-lesson-title">';
+				echo '<a href="' . esc_url( get_permalink( $lesson->ID ) ) . '" class="smartlearn-lesson-title">';
 				echo esc_html( $lesson->post_title );
 				echo '</a>';
 			} else {
-				echo '<span class="-lesson-title">';
+				echo '<span class="smartlearn-lesson-title">';
 				echo esc_html( $lesson->post_title );
 				echo '</span>';
 			}
 			
 			// Мітки
-			echo '<div class="-lesson-meta">';
+			echo '<div class="smartlearn-lesson-meta">';
 			if ( $is_free ) {
-				echo '<span class="-lesson-badge free">' . __( 'Безкоштовно', 'smartlearn-lms' ) . '</span>';
+				echo '<span class="smartlearn-lesson-badge free">' . __( 'Безкоштовно', 'smartlearn-lms' ) . '</span>';
 			}
 			if ( $duration ) {
-				echo '<span class="-lesson-duration">' . esc_html( $duration ) . '</span>';
+				echo '<span class="smartlearn-lesson-duration">' . esc_html( $duration ) . '</span>';
 			}
 			echo '</div>';
 			
@@ -146,7 +146,7 @@ class SmartLearn_LMS_Templates {
 			preg_match( '/(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/ ]{11})/', $video_url, $matches );
 			if ( isset( $matches[1] ) ) {
 				$video_id = $matches[1];
-				echo '<div class="-lesson-video youtube">';
+				echo '<div class="smartlearn-lesson-video youtube">';
 				echo '<iframe width="100%" height="500" src="https://www.youtube.com/embed/' . esc_attr( $video_id ) . '" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>';
 				echo '</div>';
 			}
@@ -155,13 +155,13 @@ class SmartLearn_LMS_Templates {
 			preg_match( '/vimeo\.com\/(\d+)/', $video_url, $matches );
 			if ( isset( $matches[1] ) ) {
 				$video_id = $matches[1];
-				echo '<div class="-lesson-video vimeo">';
+				echo '<div class="smartlearn-lesson-video vimeo">';
 				echo '<iframe src="https://player.vimeo.com/video/' . esc_attr( $video_id ) . '" width="100%" height="500" frameborder="0" allow="autoplay; fullscreen; picture-in-picture" allowfullscreen></iframe>';
 				echo '</div>';
 			}
 		} else {
 			// HTML5 video
-			echo '<div class="-lesson-video html5">';
+			echo '<div class="smartlearn-lesson-video html5">';
 			echo '<video width="100%" height="500" controls>';
 			echo '<source src="' . esc_url( $video_url ) . '">';
 			echo __( 'Ваш браузер не підтримує відео.', 'smartlearn-lms' );
@@ -185,7 +185,7 @@ class SmartLearn_LMS_Templates {
 			return;
 		}
 		
-		echo '<div class="-course-meta">';
+		echo '<div class="smartlearn-course-meta">';
 		
 		if ( $level ) {
 			$level_labels = array(
@@ -195,21 +195,21 @@ class SmartLearn_LMS_Templates {
 			);
 			$level_label = isset( $level_labels[ $level ] ) ? $level_labels[ $level ] : $level;
 			
-			echo '<div class="-course-meta-item level">';
+			echo '<div class="smartlearn-course-meta-item level">';
 			echo '<span class="label">' . __( 'Рівень:', 'smartlearn-lms' ) . '</span> ';
 			echo '<span class="value">' . esc_html( $level_label ) . '</span>';
 			echo '</div>';
 		}
 		
 		if ( $duration ) {
-			echo '<div class="-course-meta-item duration">';
+			echo '<div class="smartlearn-course-meta-item duration">';
 			echo '<span class="label">' . __( 'Тривалість:', 'smartlearn-lms' ) . '</span> ';
 			echo '<span class="value">' . esc_html( $duration ) . '</span>';
 			echo '</div>';
 		}
 		
 		if ( $lessons_count ) {
-			echo '<div class="-course-meta-item lessons">';
+			echo '<div class="smartlearn-course-meta-item lessons">';
 			echo '<span class="label">' . __( 'Уроків:', 'smartlearn-lms' ) . '</span> ';
 			echo '<span class="value">' . esc_html( $lessons_count ) . '</span>';
 			echo '</div>';

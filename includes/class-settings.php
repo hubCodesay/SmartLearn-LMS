@@ -69,12 +69,12 @@ class SmartLearn_LMS_Settings {
 				<?php _e( 'SmartLearn LMS', 'smartlearn-lms' ); ?>
 			</h1>
 			
-			<div class="-lms-settings-container">
+			<div class="smartlearn-lms-settings-container">
 				
 				<!-- Основні налаштування -->
-				<div class="-lms-settings-main">
+				<div class="smartlearn-lms-settings-main">
 					
-					<div class="-lms-card">
+					<div class="smartlearn-lms-card">
 						<h2><?php _e( '⚙️ Налаштування', 'smartlearn-lms' ); ?></h2>
 						
 						<form method="post" action="options.php">
@@ -232,10 +232,10 @@ class SmartLearn_LMS_Settings {
 					</div>
 					
 					<!-- Інструкції -->
-					<div class="-lms-card">
+					<div class="smartlearn-lms-card">
 						<h2><?php _e( '📖 Як використовувати', 'smartlearn-lms' ); ?></h2>
 						
-						<div class="-instructions">
+						<div class="smartlearn-instructions">
 							<h3><?php _e( '1. Створення курсу', 'smartlearn-lms' ); ?></h3>
 							<ol>
 								<li><?php _e( 'Перейдіть в меню "Курси → Додати новий"', 'smartlearn-lms' ); ?></li>
@@ -256,7 +256,7 @@ class SmartLearn_LMS_Settings {
 							<h3><?php _e( '3. Шорткоди', 'smartlearn-lms' ); ?></h3>
 							
 							<h4><?php _e( 'Список всіх курсів:', 'smartlearn-lms' ); ?></h4>
-							<div class="-code-block">
+							<div class="smartlearn-code-block">
 								<code>[courses_list]</code>
 								<button class="button button-small copy-shortcode" data-clipboard="[courses_list]">
 									<?php _e( 'Копіювати', 'smartlearn-lms' ); ?>
@@ -264,10 +264,10 @@ class SmartLearn_LMS_Settings {
 							</div>
 							
 							<h4><?php _e( 'Параметри шорткоду:', 'smartlearn-lms' ); ?></h4>
-							<ul class="-params-list">
+							<ul class="smartlearn-params-list">
 								<li>
 									<strong>columns</strong> - <?php _e( 'кількість колонок (1-4)', 'smartlearn-lms' ); ?>
-									<div class="-code-block">
+									<div class="smartlearn-code-block">
 										<code>[courses_list columns="4"]</code>
 										<button class="button button-small copy-shortcode" data-clipboard='[courses_list columns="4"]'>
 											<?php _e( 'Копіювати', 'smartlearn-lms' ); ?>
@@ -276,7 +276,7 @@ class SmartLearn_LMS_Settings {
 								</li>
 								<li>
 									<strong>category</strong> - <?php _e( 'slug категорії або декілька через кому', 'smartlearn-lms' ); ?>
-									<div class="-code-block">
+									<div class="smartlearn-code-block">
 										<code>[courses_list category="programming"]</code>
 										<button class="button button-small copy-shortcode" data-clipboard='[courses_list category="programming"]'>
 											<?php _e( 'Копіювати', 'smartlearn-lms' ); ?>
@@ -285,7 +285,7 @@ class SmartLearn_LMS_Settings {
 								</li>
 								<li>
 									<strong>per_page</strong> - <?php _e( 'кількість курсів (-1 = всі)', 'smartlearn-lms' ); ?>
-									<div class="-code-block">
+									<div class="smartlearn-code-block">
 										<code>[courses_list per_page="6"]</code>
 										<button class="button button-small copy-shortcode" data-clipboard='[courses_list per_page="6"]'>
 											<?php _e( 'Копіювати', 'smartlearn-lms' ); ?>
@@ -294,7 +294,7 @@ class SmartLearn_LMS_Settings {
 								</li>
 								<li>
 									<strong>orderby</strong> - <?php _e( 'сортування (date, title, menu_order)', 'smartlearn-lms' ); ?>
-									<div class="-code-block">
+									<div class="smartlearn-code-block">
 										<code>[courses_list orderby="title" order="ASC"]</code>
 										<button class="button button-small copy-shortcode" data-clipboard='[courses_list orderby="title" order="ASC"]'>
 											<?php _e( 'Копіювати', 'smartlearn-lms' ); ?>
@@ -304,7 +304,7 @@ class SmartLearn_LMS_Settings {
 							</ul>
 							
 							<h4><?php _e( 'Список уроків курсу:', 'smartlearn-lms' ); ?></h4>
-							<div class="-code-block">
+							<div class="smartlearn-code-block">
 								<code>[course_lessons course_id="123"]</code>
 								<button class="button button-small copy-shortcode" data-clipboard='[course_lessons course_id="123"]'>
 									<?php _e( 'Копіювати', 'smartlearn-lms' ); ?>
@@ -327,10 +327,10 @@ class SmartLearn_LMS_Settings {
 				</div>
 				
 				<!-- Бічна панель -->
-				<div class="-lms-settings-sidebar">
+				<div class="smartlearn-lms-settings-sidebar">
 					
 					<!-- Про плагін -->
-					<div class="-lms-card -about">
+					<div class="smartlearn-lms-card -about">
 						<div class="-logo">
 							<span class="dashicons dashicons-welcome-learn-more"></span>
 						</div>
@@ -355,7 +355,7 @@ class SmartLearn_LMS_Settings {
 					</div>
 					
 					<!-- Підтримка розробки -->
-					<div class="-lms-card -donate">
+					<div class="smartlearn-lms-card -donate">
 						<h3>
 							<span class="dashicons dashicons-heart"></span>
 							<?php _e( 'Підтримати розробку', 'smartlearn-lms' ); ?>
@@ -379,7 +379,7 @@ class SmartLearn_LMS_Settings {
 					</div>
 					
 					<!-- Stabion Studio -->
-					<div class="-lms-card -stabion">
+					<div class="smartlearn-lms-card -stabion">
 						<h3><?php _e( 'Про автора', 'smartlearn-lms' ); ?></h3>
 						<p><?php _e( 'Розроблено командою', 'smartlearn-lms' ); ?> <strong>Stabion Studio</strong></p>
 						<p><?php _e( 'Ми створюємо професійні рішення для WordPress та WooCommerce.', 'smartlearn-lms' ); ?></p>
@@ -397,7 +397,7 @@ class SmartLearn_LMS_Settings {
 					</div>
 					
 					<!-- Корисні посилання -->
-					<div class="-lms-card">
+					<div class="smartlearn-lms-card">
 						<h3><?php _e( '🔗 Корисні посилання', 'smartlearn-lms' ); ?></h3>
 						<ul class="-links-list">
 							<li>

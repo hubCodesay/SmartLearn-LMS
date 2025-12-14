@@ -13,25 +13,25 @@ $video_url = get_post_meta( $lesson_id, '_smartlearn_lesson_video_url', true );
 $duration = get_post_meta( $lesson_id, '_smartlearn_lesson_duration', true );
 ?>
 
-<div class="-lesson-single">
+<div class="smartlearn-lesson-single">
 	
 	<?php while ( have_posts() ) : the_post(); ?>
 		
 		<article id="lesson-<?php the_ID(); ?>" <?php post_class( '-lesson' ); ?>>
 			
 			<?php if ( $course_id ) : ?>
-				<div class="-lesson-breadcrumb">
+				<div class="smartlearn-lesson-breadcrumb">
 					<a href="<?php echo esc_url( get_permalink( $course_id ) ); ?>" class="back-to-course">
 						← <?php echo esc_html( get_the_title( $course_id ) ); ?>
 					</a>
 				</div>
 			<?php endif; ?>
 			
-			<header class="-lesson-header">
-				<h1 class="-lesson-title"><?php the_title(); ?></h1>
+			<header class="smartlearn-lesson-header">
+				<h1 class="smartlearn-lesson-title"><?php the_title(); ?></h1>
 				
 				<?php if ( $duration ) : ?>
-					<div class="-lesson-meta">
+					<div class="smartlearn-lesson-meta">
 						<span class="lesson-duration"><?php echo esc_html( $duration ); ?></span>
 					</div>
 				<?php endif; ?>
@@ -40,17 +40,17 @@ $duration = get_post_meta( $lesson_id, '_smartlearn_lesson_duration', true );
 			<?php if ( $has_access ) : ?>
 				
 				<?php if ( $video_url ) : ?>
-					<div class="-lesson-video-wrap">
+					<div class="smartlearn-lesson-video-wrap">
 						<?php SmartLearn_LMS_Templates::display_lesson_video( $lesson_id ); ?>
 					</div>
 				<?php endif; ?>
 				
-				<div class="-lesson-content">
+				<div class="smartlearn-lesson-content">
 					<?php the_content(); ?>
 				</div>
 				
 				<?php if ( $course_id ) : ?>
-					<div class="-lesson-navigation">
+					<div class="smartlearn-lesson-navigation">
 						<?php
 						// Отримати всі уроки курсу
 						$lessons = SmartLearn_LMS_Templates::get_course_lessons( $course_id );
@@ -85,7 +85,7 @@ $duration = get_post_meta( $lesson_id, '_smartlearn_lesson_duration', true );
 				
 			<?php else : ?>
 				
-				<div class="-lesson-locked">
+				<div class="smartlearn-lesson-locked">
 					<?php echo SmartLearn_LMS_Access_Control::get_access_denied_message( $course_id ); ?>
 				</div>
 				

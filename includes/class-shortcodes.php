@@ -21,10 +21,14 @@ class SmartLearn_LMS_Shortcodes {
 	 * @return string
 	 */
 	public function courses_list( $atts ) {
+		// Отримуємо налаштування за замовчуванням
+		$default_columns = get_option( 'smartlearn_lms_default_columns', '3' );
+		$default_per_page = get_option( 'smartlearn_lms_courses_per_page', '-1' );
+		
 		$atts = shortcode_atts( array(
 			'category' => '',
-			'columns' => '3',
-			'per_page' => '-1',
+			'columns' => $default_columns,
+			'per_page' => $default_per_page,
 			'orderby' => 'date',
 			'order' => 'DESC',
 		), $atts );
@@ -58,7 +62,7 @@ class SmartLearn_LMS_Shortcodes {
 		
 		ob_start();
 		
-		echo '<div class="-courses-grid ' . esc_attr( $columns_class ) . '">';
+		echo '<div class="smartlearn-courses-grid ' . esc_attr( $columns_class ) . '">';
 		
 		while ( $courses->have_posts() ) {
 			$courses->the_post();
@@ -70,7 +74,7 @@ class SmartLearn_LMS_Shortcodes {
 			$duration = get_post_meta( $course_id, '_smartlearn_course_duration', true );
 			$level = get_post_meta( $course_id, '_smartlearn_course_level', true );
 			
-			$classes = array( '-course-item' );
+			$classes = array( 'smartlearn-course-item' );
 			if ( $has_access ) {
 				$classes[] = 'has-access';
 			}
@@ -82,25 +86,25 @@ class SmartLearn_LMS_Shortcodes {
 			
 			// Зображення
 			if ( has_post_thumbnail() ) {
-				echo '<div class="-course-thumbnail">';
+				echo '<div class="smartlearn-course-thumbnail">';
 				echo '<a href="' . esc_url( get_permalink() ) . '">';
 				the_post_thumbnail( 'medium' );
 				echo '</a>';
 				
 				// Мітка безкоштовного курсу
 				if ( $is_free ) {
-					echo '<span class="-course-badge free">' . __( 'Безкоштовно', 'smartlearn-lms' ) . '</span>';
+					echo '<span class="smartlearn-course-badge free">' . __( 'Безкоштовно', 'smartlearn-lms' ) . '</span>';
 				}
 				
 				echo '</div>';
 			}
 			
-			echo '<div class="-course-content">';
+			echo '<div class="smartlearn-course-content">';
 			
 			// Категорії
 			$categories = get_the_terms( $course_id, 'course_category' );
 			if ( $categories && ! is_wp_error( $categories ) ) {
-				echo '<div class="-course-categories">';
+				echo '<div class="smartlearn-course-categories">';
 				$cat_links = array();
 				foreach ( $categories as $category ) {
 					$cat_links[] = '<a href="' . esc_url( get_term_link( $category ) ) . '">' . esc_html( $category->name ) . '</a>';
@@ -110,13 +114,13 @@ class SmartLearn_LMS_Shortcodes {
 			}
 			
 			// Назва
-			echo '<h3 class="-course-title">';
+			echo '<h3 class="smartlearn-course-title">';
 			echo '<a href="' . esc_url( get_permalink() ) . '">' . get_the_title() . '</a>';
 			echo '</h3>';
 			
 			// Мета-інформація
 			if ( $level || $duration ) {
-				echo '<div class="-course-meta">';
+				echo '<div class="smartlearn-course-meta">';
 				
 				if ( $level ) {
 					$level_labels = array(
@@ -137,13 +141,13 @@ class SmartLearn_LMS_Shortcodes {
 			
 			// Опис
 			if ( has_excerpt() ) {
-				echo '<div class="-course-excerpt">';
+				echo '<div class="smartlearn-course-excerpt">';
 				the_excerpt();
 				echo '</div>';
 			}
 			
 			// Кнопка доступу
-			echo '<div class="-course-button-wrap">';
+			echo '<div class="smartlearn-course-button-wrap">';
 			echo SmartLearn_LMS_Access_Control::get_course_access_button( $course_id );
 			echo '</div>';
 			

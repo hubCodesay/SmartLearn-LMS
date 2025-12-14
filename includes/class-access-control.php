@@ -200,8 +200,8 @@ class SmartLearn_LMS_Access_Control {
 		
 		ob_start();
 		?>
-		<div class="-access-denied">
-			<div class="-access-denied-icon">🔒</div>
+		<div class="smartlearn-access-denied">
+			<div class="smartlearn-access-denied-icon">🔒</div>
 			<h3><?php echo esc_html( $message ); ?></h3>
 			<?php if ( $button_url ) : ?>
 				<p>
