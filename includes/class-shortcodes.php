@@ -12,6 +12,19 @@ class SmartLearn_LMS_Shortcodes {
 	public function __construct() {
 		add_shortcode( 'courses_list', array( $this, 'courses_list' ) );
 		add_shortcode( 'course_lessons', array( $this, 'course_lessons' ) );
+		add_action( 'wp_enqueue_scripts', array( $this, 'enqueue_styles' ) );
+	}
+	
+	/**
+	 * Підключити стилі для шорткодів
+	 */
+	public function enqueue_styles() {
+		wp_enqueue_style(
+			'smartlearn-lms-frontend',
+			SMARTLEARN_LMS_URL . 'assets/css/frontend.css',
+			array(),
+			SMARTLEARN_LMS_VERSION
+		);
 	}
 	
 	/**
