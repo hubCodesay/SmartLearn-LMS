@@ -96,7 +96,7 @@ class SmartLearn_Courses_LMS {
 		// Initialize components
 		new SmartLearn_LMS_Post_Types();
 		new SmartLearn_LMS_Meta_Boxes();
-		new SmartLearn_LMS_Access_Control();
+		// Access_Control має тільки статичні методи - не потрібно ініціалізувати
 		new SmartLearn_LMS_Templates();
 		new SmartLearn_LMS_Shortcodes();
 		new SmartLearn_LMS_Settings();
