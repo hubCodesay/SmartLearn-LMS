@@ -23,8 +23,31 @@ class SmartLearn_LMS_Shortcodes {
 			'smartlearn-lms-frontend',
 			SMARTLEARN_LMS_URL . 'assets/css/frontend.css',
 			array(),
-			SMARTLEARN_LMS_VERSION
+			SMARTLEARN_LMS_VERSION . '-' . time() // Додаємо timestamp щоб оминути кеш
 		);
+		
+		// Додаємо inline критичні стилі для гарантії
+		$inline_css = '
+			.smartlearn-courses-grid { 
+				display: grid !important; 
+				gap: 30px !important; 
+				margin: 30px 0 !important; 
+				width: 100% !important;
+			}
+			.smartlearn-courses-grid.columns-1 { grid-template-columns: 1fr !important; }
+			.smartlearn-courses-grid.columns-2 { grid-template-columns: repeat(2, 1fr) !important; }
+			.smartlearn-courses-grid.columns-3 { grid-template-columns: repeat(3, 1fr) !important; }
+			.smartlearn-courses-grid.columns-4 { grid-template-columns: repeat(4, 1fr) !important; }
+			.smartlearn-course-item { 
+				display: flex !important; 
+				flex-direction: column !important; 
+				background: #fff; 
+				border: 1px solid #e0e0e0; 
+				border-radius: 8px; 
+				overflow: hidden;
+			}
+		';
+		wp_add_inline_style( 'smartlearn-lms-frontend', $inline_css );
 	}
 	
 	/**
