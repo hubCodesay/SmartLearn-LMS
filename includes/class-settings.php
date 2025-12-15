@@ -24,7 +24,7 @@ class SmartLearn_LMS_Settings {
 			__( 'Налаштування LMS', 'smartlearn-lms' ),
 			__( 'Налаштування', 'smartlearn-lms' ),
 			'manage_options',
-			'-lms-settings',
+			'smartlearn-lms-settings',
 			array( $this, 'render_settings_page' )
 		);
 	}
@@ -46,12 +46,12 @@ class SmartLearn_LMS_Settings {
 	 * Підключити стилі для сторінки налаштувань
 	 */
 	public function enqueue_settings_styles( $hook ) {
-		if ( 'smartlearn_course_page_-lms-settings' !== $hook ) {
+		if ( 'smartlearn_course_page_smartlearn-lms-settings' !== $hook ) {
 			return;
 		}
 		
 		wp_enqueue_style( 
-			'-lms-settings', 
+			'smartlearn-lms-settings', 
 			SMARTLEARN_LMS_URL . 'assets/css/settings.css', 
 			array(), 
 			SMARTLEARN_LMS_VERSION 
@@ -63,7 +63,7 @@ class SmartLearn_LMS_Settings {
 	 */
 	public function render_settings_page() {
 		?>
-		<div class="wrap -lms-settings-wrap">
+		<div class="wrap smartlearn-lms-settings-wrap">
 			<h1>
 				<span class="dashicons dashicons-welcome-learn-more"></span>
 				<?php _e( 'SmartLearn LMS', 'smartlearn-lms' ); ?>
