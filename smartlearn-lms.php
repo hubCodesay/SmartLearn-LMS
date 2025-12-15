@@ -3,7 +3,7 @@
  * Plugin Name: SmartLearn LMS
  * Plugin URI: https://stabion.studio/plugins/smartlearn-lms
  * Description: Professional Learning Management System with full WooCommerce integration for selling online courses. Create courses, add lessons, embed videos, control access and monetize your educational content.
- * Version: 1.0.1
+ * Version: 1.0.2
  * Author: Stabion Studio
  * Author URI: https://stabion.studio
  * Text Domain: smartlearn-lms
@@ -21,7 +21,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 // Define plugin constants
-define( 'SMARTLEARN_LMS_VERSION', '1.0.1' );
+define( 'SMARTLEARN_LMS_VERSION', '1.0.2' );
 define( 'SMARTLEARN_LMS_FILE', __FILE__ );
 define( 'SMARTLEARN_LMS_PATH', plugin_dir_path( __FILE__ ) );
 define( 'SMARTLEARN_LMS_URL', plugin_dir_url( __FILE__ ) );
