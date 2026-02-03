@@ -59,6 +59,214 @@ class SmartLearn_LMS_Meta_Boxes {
 			'side',
 			'default'
 		);
+
+		// Course access stats meta box
+		add_meta_box(
+			'smartlearn_course_access_stats',
+			__( 'Доступ: покупки та закінчення', 'smartlearn-lms' ),
+			array( $this, 'render_course_access_stats_meta_box' ),
+			'smartlearn_course',
+			'side',
+			'default'
+		);
+	}
+
+	/**
+	 * Render course access stats meta box.
+	 */
+	public function render_course_access_stats_meta_box( $post ) {
+		if ( ! function_exists( 'WC' ) ) {
+			echo '<p>' . esc_html__( 'WooCommerce не активний.', 'smartlearn-lms' ) . '</p>';
+			return;
+		}
+
+		$product_id = absint( get_post_meta( $post->ID, '_smartlearn_course_product_id', true ) );
+		$is_free = get_post_meta( $post->ID, '_smartlearn_course_is_free', true ) === '1';
+
+		if ( $is_free ) {
+			echo '<p>' . esc_html__( 'Курс безкоштовний — доступ без обмежень.', 'smartlearn-lms' ) . '</p>';
+			return;
+		}
+
+		if ( ! $product_id ) {
+			echo '<p>' . esc_html__( 'Не прив’язано товар WooCommerce. Доступ буде закритий для всіх.', 'smartlearn-lms' ) . '</p>';
+			return;
+		}
+
+		$duration_value = absint( get_post_meta( $post->ID, '_smartlearn_course_access_duration_value', true ) );
+		$duration_unit = get_post_meta( $post->ID, '_smartlearn_course_access_duration_unit', true );
+		if ( ! in_array( $duration_unit, array( 'days', 'months' ), true ) ) {
+			$duration_unit = 'days';
+		}
+		$duration_label = $duration_value > 0
+			? sprintf( '%d %s', $duration_value, ( 'months' === $duration_unit ? __( 'місяців', 'smartlearn-lms' ) : __( 'днів', 'smartlearn-lms' ) ) )
+			: __( 'без обмеження', 'smartlearn-lms' );
+		echo '<p><strong>' . esc_html__( 'Термін доступу:', 'smartlearn-lms' ) . '</strong> ' . esc_html( $duration_label ) . '</p>';
+
+		$rows = $this->get_course_access_stats_rows( $post->ID, $product_id, $duration_value, $duration_unit );
+
+		if ( empty( $rows ) ) {
+			echo '<p>' . esc_html__( 'Покупок цього курсу ще не знайдено.', 'smartlearn-lms' ) . '</p>';
+			return;
+		}
+
+		echo '<div style="max-height:280px;overflow:auto;border:1px solid #e5e5e5;border-radius:6px;">';
+		echo '<table class="widefat striped" style="margin:0;border:0;">';
+		echo '<thead><tr>';
+		echo '<th>' . esc_html__( 'Клієнт', 'smartlearn-lms' ) . '</th>';
+		echo '<th>' . esc_html__( 'Купив', 'smartlearn-lms' ) . '</th>';
+		echo '<th>' . esc_html__( 'До', 'smartlearn-lms' ) . '</th>';
+		echo '</tr></thead><tbody>';
+
+		foreach ( $rows as $row ) {
+			$name = $row['name'] ? $row['name'] : $row['email'];
+			$purchased_at = $row['purchased_at'] ? wp_date( 'd.m.Y', $row['purchased_at'] ) : '—';
+			$expires_at = $row['expires_at'] ? wp_date( 'd.m.Y', $row['expires_at'] ) : '∞';
+			$status = $row['is_expired'] ? __( 'закінчився', 'smartlearn-lms' ) : __( 'активний', 'smartlearn-lms' );
+			$status_color = $row['is_expired'] ? '#b32d2e' : '#1d7f2f';
+			echo '<tr>';
+			echo '<td>' . esc_html( $name ) . '<br/><small style="color:#666;">' . esc_html( $status ) . '</small></td>';
+			echo '<td><span style="white-space:nowrap;">' . esc_html( $purchased_at ) . '</span></td>';
+			echo '<td><span style="white-space:nowrap;color:' . esc_attr( $status_color ) . ';">' . esc_html( $expires_at ) . '</span></td>';
+			echo '</tr>';
+		}
+
+		echo '</tbody></table>';
+		echo '</div>';
+		echo '<p class="description" style="margin-top:10px;">' . esc_html__( 'Показано останню дату покупки по кожному клієнту. Після закінчення терміну доступ блокується автоматично.', 'smartlearn-lms' ) . '</p>';
+	}
+
+	private function get_course_access_stats_rows( $course_id, $product_id, $duration_value, $duration_unit ) {
+		$cache_key = 'smartlearn_access_stats_' . absint( $course_id ) . '_' . absint( $product_id ) . '_' . absint( $duration_value ) . '_' . sanitize_key( $duration_unit );
+		$cached = get_transient( $cache_key );
+		if ( false !== $cached ) {
+			return $cached;
+		}
+
+		global $wpdb;
+		$order_items = $wpdb->prefix . 'woocommerce_order_items';
+		$item_meta = $wpdb->prefix . 'woocommerce_order_itemmeta';
+		$posts = $wpdb->posts;
+
+		// Only completed/processing orders.
+		$statuses = array( 'wc-completed', 'wc-processing' );
+		$placeholders = implode( ',', array_fill( 0, count( $statuses ), '%s' ) );
+
+		$sql = "
+			SELECT DISTINCT oi.order_id
+			FROM {$order_items} oi
+			INNER JOIN {$item_meta} oim ON oi.order_item_id = oim.order_item_id
+			INNER JOIN {$posts} p ON p.ID = oi.order_id
+			WHERE oi.order_item_type = 'line_item'
+			AND p.post_type = 'shop_order'
+			AND p.post_status IN ({$placeholders})
+			AND oim.meta_key IN ('_product_id','_variation_id')
+			AND oim.meta_value = %d
+			ORDER BY oi.order_id DESC
+			LIMIT 2000
+		";
+
+		$params = array_merge( $statuses, array( absint( $product_id ) ) );
+		$order_ids = $wpdb->get_col( $wpdb->prepare( $sql, $params ) );
+
+		if ( empty( $order_ids ) ) {
+			set_transient( $cache_key, array(), 5 * MINUTE_IN_SECONDS );
+			return array();
+		}
+
+		$orders = wc_get_orders(
+			array(
+				'include' => array_map( 'absint', $order_ids ),
+				'limit'   => -1,
+				'return'  => 'objects',
+			)
+		);
+
+		$customers = array();
+		foreach ( $orders as $order ) {
+			/** @var WC_Order $order */
+			$customer_id = (int) $order->get_customer_id();
+			$email = sanitize_email( $order->get_billing_email() );
+			$key = $customer_id ? 'u:' . $customer_id : ( $email ? 'e:' . $email : '' );
+			if ( ! $key ) {
+				continue;
+			}
+
+			$found = false;
+			foreach ( $order->get_items() as $item ) {
+				$item_product_id = (int) $item->get_product_id();
+				$item_variation_id = (int) $item->get_variation_id();
+				if ( $item_product_id === (int) $product_id || $item_variation_id === (int) $product_id ) {
+					$found = true;
+					break;
+				}
+			}
+			if ( ! $found ) {
+				continue;
+			}
+
+			$date = $order->get_date_paid();
+			if ( ! $date ) {
+				$date = $order->get_date_completed();
+			}
+			if ( ! $date ) {
+				$date = $order->get_date_created();
+			}
+			$purchase_ts = $date ? (int) $date->getTimestamp() : 0;
+			if ( ! $purchase_ts ) {
+				continue;
+			}
+
+			if ( ! isset( $customers[ $key ] ) || $purchase_ts > $customers[ $key ]['purchased_at'] ) {
+				$name = '';
+				if ( $customer_id ) {
+					$user = get_user_by( 'id', $customer_id );
+					if ( $user ) {
+						$name = trim( $user->display_name );
+						if ( ! $email ) {
+							$email = sanitize_email( $user->user_email );
+						}
+					}
+				}
+				if ( ! $name ) {
+					$name = trim( $order->get_formatted_billing_full_name() );
+				}
+
+				$customers[ $key ] = array(
+					'user_id'     => $customer_id,
+					'email'       => $email,
+					'name'        => $name,
+					'purchased_at' => $purchase_ts,
+				);
+			}
+		}
+
+		$rows = array();
+		foreach ( $customers as $customer ) {
+			$expires_at = 0;
+			if ( class_exists( 'SmartLearn_LMS_Access_Control' ) ) {
+				$expires_at = SmartLearn_LMS_Access_Control::calculate_course_access_expires_at( $course_id, $customer['purchased_at'] );
+			}
+			$is_expired = $expires_at ? ( current_time( 'timestamp' ) >= $expires_at ) : false;
+			$rows[] = array(
+				'user_id'     => $customer['user_id'],
+				'email'       => $customer['email'],
+				'name'        => $customer['name'],
+				'purchased_at' => $customer['purchased_at'],
+				'expires_at'   => $expires_at,
+				'is_expired'   => $is_expired,
+			);
+		}
+
+		usort(
+			$rows,
+			function ( $a, $b ) {
+				return (int) $b['purchased_at'] <=> (int) $a['purchased_at'];
+			}
+		);
+
+		set_transient( $cache_key, $rows, 5 * MINUTE_IN_SECONDS );
+		return $rows;
 	}
 	
 	/**
@@ -69,6 +277,11 @@ class SmartLearn_LMS_Meta_Boxes {
 		
 		$product_id = get_post_meta( $post->ID, '_smartlearn_course_product_id', true );
 		$is_free = get_post_meta( $post->ID, '_smartlearn_course_is_free', true );
+		$access_duration_value = absint( get_post_meta( $post->ID, '_smartlearn_course_access_duration_value', true ) );
+		$access_duration_unit = get_post_meta( $post->ID, '_smartlearn_course_access_duration_unit', true );
+		if ( ! in_array( $access_duration_unit, array( 'days', 'months' ), true ) ) {
+			$access_duration_unit = 'days';
+		}
 		
 		?>
 		<div class="-meta-box">
@@ -108,12 +321,37 @@ class SmartLearn_LMS_Meta_Boxes {
 					<?php esc_html_e( 'Користувачі, які купили цей товар, отримають доступ до курсу.', 'smartlearn-lms' ); ?>
 				</p>
 			</p>
+
+			<p>
+				<label for="smartlearn_course_access_duration_value">
+					<strong><?php esc_html_e( 'Обмеження доступу після покупки:', 'smartlearn-lms' ); ?></strong>
+				</label><br/>
+				<span style="display:flex;gap:10px;align-items:center;max-width:400px;">
+					<input
+						type="number"
+						min="0"
+						step="1"
+						name="smartlearn_course_access_duration_value"
+						id="smartlearn_course_access_duration_value"
+						value="<?php echo esc_attr( $access_duration_value ); ?>"
+						style="width:120px;"
+						placeholder="0"
+					/>
+					<select name="smartlearn_course_access_duration_unit" id="smartlearn_course_access_duration_unit" style="flex:1;">
+						<option value="days" <?php selected( $access_duration_unit, 'days' ); ?>><?php esc_html_e( 'днів', 'smartlearn-lms' ); ?></option>
+						<option value="months" <?php selected( $access_duration_unit, 'months' ); ?>><?php esc_html_e( 'місяців', 'smartlearn-lms' ); ?></option>
+					</select>
+				</span>
+				<p class="description">
+					<?php esc_html_e( '0 або порожньо = доступ без обмеження у часі. Якщо вказано, доступ закінчиться через N днів/місяців після останньої покупки курсу.', 'smartlearn-lms' ); ?>
+				</p>
+			</p>
 			
 			<p>
 				<label for="smartlearn_course_duration">
-					<strong><?php esc_html_e( 'Тривалість курсу:', 'smartlearn-lms' ); ?></strong>
+					<strong><?php esc_html_e( 'Тривалість курсу (місяці):', 'smartlearn-lms' ); ?></strong>
 				</label><br/>
-				<input type="text" name="smartlearn_course_duration" id="smartlearn_course_duration" value="<?php echo esc_attr( get_post_meta( $post->ID, '_smartlearn_course_duration', true ) ); ?>" style="width:100%;max-width:400px;" placeholder="<?php esc_attr_e( 'наприклад: 4 тижні, 12 годин', 'smartlearn-lms' ); ?>" />
+				<input type="number" min="0" step="1" name="smartlearn_course_duration" id="smartlearn_course_duration" value="<?php echo esc_attr( absint( get_post_meta( $post->ID, '_smartlearn_course_duration', true ) ) ); ?>" style="width:100%;max-width:400px;" placeholder="<?php esc_attr_e( 'наприклад: 2', 'smartlearn-lms' ); ?>" />
 			</p>
 			
 			<p>
@@ -158,7 +396,12 @@ class SmartLearn_LMS_Meta_Boxes {
 		
 		$course_id = get_post_meta( $post->ID, '_smartlearn_lesson_course_id', true );
 		$is_free = get_post_meta( $post->ID, '_smartlearn_lesson_is_free', true );
-		$video_url = get_post_meta( $post->ID, '_smartlearn_lesson_video_url', true );
+		$video_urls = get_post_meta( $post->ID, '_smartlearn_lesson_video_urls', true );
+		if ( ! is_array( $video_urls ) || empty( $video_urls ) ) {
+			// Migrate old single URL if exists
+			$old_url = get_post_meta( $post->ID, '_smartlearn_lesson_video_url', true );
+			$video_urls = $old_url ? array( $old_url ) : array( '' );
+		}
 		
 		?>
 		<div class="-meta-box">
@@ -196,15 +439,79 @@ class SmartLearn_LMS_Meta_Boxes {
 				</label>
 			</p>
 			
-			<p>
-				<label for="smartlearn_lesson_video_url">
+			<div>
+				<label>
 					<strong><?php esc_html_e( 'Відео URL (YouTube, Vimeo):', 'smartlearn-lms' ); ?></strong>
-				</label><br/>
-				<input type="url" name="smartlearn_lesson_video_url" id="smartlearn_lesson_video_url" value="<?php echo esc_attr( $video_url ); ?>" style="width:100%;" placeholder="https://www.youtube.com/watch?v=..." />
-				<p class="description">
-					<?php esc_html_e( 'Опціонально: додайте посилання на відео з YouTube або Vimeo.', 'smartlearn-lms' ); ?>
+				</label>
+				<p class="description" style="margin-top:5px;margin-bottom:10px;">
+					<?php esc_html_e( 'Додайте посилання на відео з YouTube або Vimeo. Можна додати декілька відео.', 'smartlearn-lms' ); ?>
 				</p>
-			</p>
+				<div id="smartlearn-video-urls-container">
+					<?php foreach ( $video_urls as $index => $url ) : ?>
+						<div class="smartlearn-video-url-row" style="display:flex;gap:8px;margin-bottom:8px;align-items:center;">
+							<input type="url" name="smartlearn_lesson_video_urls[]" value="<?php echo esc_attr( $url ); ?>" style="flex:1;" placeholder="https://www.youtube.com/watch?v=..." />
+							<?php if ( $url ) : ?>
+								<a href="<?php echo esc_url( $url ); ?>" target="_blank" class="button" style="padding:0 10px;" title="<?php esc_attr_e( 'Відкрити посилання', 'smartlearn-lms' ); ?>">
+									<span class="dashicons dashicons-external" style="margin-top:4px;"></span>
+								</a>
+							<?php endif; ?>
+							<button type="button" class="button smartlearn-remove-video-url" style="padding:0 10px;color:#b32d2e;" title="<?php esc_attr_e( 'Видалити', 'smartlearn-lms' ); ?>">
+								<span class="dashicons dashicons-trash" style="margin-top:4px;"></span>
+							</button>
+						</div>
+					<?php endforeach; ?>
+				</div>
+				<button type="button" id="smartlearn-add-video-url" class="button" style="margin-top:5px;">
+					<span class="dashicons dashicons-plus-alt" style="margin-top:4px;margin-right:3px;"></span>
+					<?php esc_html_e( 'Додати відео', 'smartlearn-lms' ); ?>
+				</button>
+				<style>
+					.smartlearn-video-url-row input[type="url"] { min-width: 0; }
+					.smartlearn-video-url-row .button { flex-shrink: 0; height: 30px; line-height: 28px; }
+				</style>
+				<script type="text/javascript">
+					jQuery(document).ready(function($) {
+						// Add new video URL field
+						$('#smartlearn-add-video-url').on('click', function() {
+							var row = $('<div class="smartlearn-video-url-row" style="display:flex;gap:8px;margin-bottom:8px;align-items:center;">' +
+								'<input type="url" name="smartlearn_lesson_video_urls[]" value="" style="flex:1;" placeholder="https://www.youtube.com/watch?v=..." />' +
+								'<button type="button" class="button smartlearn-remove-video-url" style="padding:0 10px;color:#b32d2e;" title="<?php esc_attr_e( 'Видалити', 'smartlearn-lms' ); ?>">' +
+								'<span class="dashicons dashicons-trash" style="margin-top:4px;"></span>' +
+								'</button>' +
+								'</div>');
+							$('#smartlearn-video-urls-container').append(row);
+						});
+						
+						// Remove video URL field
+						$(document).on('click', '.smartlearn-remove-video-url', function() {
+							if ($('.smartlearn-video-url-row').length > 1) {
+								$(this).closest('.smartlearn-video-url-row').remove();
+							} else {
+								$(this).closest('.smartlearn-video-url-row').find('input').val('');
+							}
+						});
+						
+						// Update open link button when URL changes
+						$(document).on('input', '.smartlearn-video-url-row input[type="url"]', function() {
+							var $row = $(this).closest('.smartlearn-video-url-row');
+							var url = $(this).val().trim();
+							var $openBtn = $row.find('a.button');
+							
+							if (url) {
+								if ($openBtn.length === 0) {
+									$openBtn = $('<a href="" target="_blank" class="button" style="padding:0 10px;" title="<?php esc_attr_e( 'Відкрити посилання', 'smartlearn-lms' ); ?>">' +
+										'<span class="dashicons dashicons-external" style="margin-top:4px;"></span>' +
+										'</a>');
+									$row.find('.smartlearn-remove-video-url').before($openBtn);
+								}
+								$openBtn.attr('href', url);
+							} else {
+								$openBtn.remove();
+							}
+						});
+					});
+				</script>
+			</div>
 			
 			<p>
 				<label for="smartlearn_lesson_duration">
@@ -276,10 +583,28 @@ class SmartLearn_LMS_Meta_Boxes {
 		// Save product ID
 		$product_id = isset( $_POST['smartlearn_course_product_id'] ) ? absint( $_POST['smartlearn_course_product_id'] ) : '';
 		update_post_meta( $post_id, '_smartlearn_course_product_id', $product_id );
+
+		// Save access duration settings (0 = unlimited)
+		$access_value = isset( $_POST['smartlearn_course_access_duration_value'] ) ? absint( $_POST['smartlearn_course_access_duration_value'] ) : 0;
+		$access_unit = isset( $_POST['smartlearn_course_access_duration_unit'] ) ? sanitize_text_field( $_POST['smartlearn_course_access_duration_unit'] ) : 'days';
+		if ( ! in_array( $access_unit, array( 'days', 'months' ), true ) ) {
+			$access_unit = 'days';
+		}
+		if ( $access_value > 0 ) {
+			update_post_meta( $post_id, '_smartlearn_course_access_duration_value', $access_value );
+			update_post_meta( $post_id, '_smartlearn_course_access_duration_unit', $access_unit );
+		} else {
+			delete_post_meta( $post_id, '_smartlearn_course_access_duration_value' );
+			delete_post_meta( $post_id, '_smartlearn_course_access_duration_unit' );
+		}
 		
-		// Save duration
-		$duration = isset( $_POST['smartlearn_course_duration'] ) ? sanitize_text_field( $_POST['smartlearn_course_duration'] ) : '';
-		update_post_meta( $post_id, '_smartlearn_course_duration', $duration );
+		// Save duration (months as integer)
+		$duration = isset( $_POST['smartlearn_course_duration'] ) ? absint( $_POST['smartlearn_course_duration'] ) : 0;
+		if ( $duration > 0 ) {
+			update_post_meta( $post_id, '_smartlearn_course_duration', $duration );
+		} else {
+			delete_post_meta( $post_id, '_smartlearn_course_duration' );
+		}
 		
 		// Save level
 		$level = isset( $_POST['smartlearn_course_level'] ) ? sanitize_text_field( $_POST['smartlearn_course_level'] ) : 'beginner';
@@ -314,9 +639,23 @@ class SmartLearn_LMS_Meta_Boxes {
 		$is_free = isset( $_POST['smartlearn_lesson_is_free'] ) ? '1' : '';
 		update_post_meta( $post_id, '_smartlearn_lesson_is_free', $is_free );
 		
-		// Save video URL
-		$video_url = isset( $_POST['smartlearn_lesson_video_url'] ) ? esc_url_raw( $_POST['smartlearn_lesson_video_url'] ) : '';
-		update_post_meta( $post_id, '_smartlearn_lesson_video_url', $video_url );
+		// Save video URLs (multiple)
+		$video_urls = array();
+		if ( isset( $_POST['smartlearn_lesson_video_urls'] ) && is_array( $_POST['smartlearn_lesson_video_urls'] ) ) {
+			foreach ( $_POST['smartlearn_lesson_video_urls'] as $url ) {
+				$url = esc_url_raw( trim( $url ) );
+				if ( ! empty( $url ) ) {
+					$video_urls[] = $url;
+				}
+			}
+		}
+		update_post_meta( $post_id, '_smartlearn_lesson_video_urls', $video_urls );
+		// Keep old meta for backward compatibility (use first URL if exists)
+		if ( ! empty( $video_urls ) ) {
+			update_post_meta( $post_id, '_smartlearn_lesson_video_url', $video_urls[0] );
+		} else {
+			delete_post_meta( $post_id, '_smartlearn_lesson_video_url' );
+		}
 		
 		// Save duration
 		$duration = isset( $_POST['smartlearn_lesson_duration'] ) ? sanitize_text_field( $_POST['smartlearn_lesson_duration'] ) : '';

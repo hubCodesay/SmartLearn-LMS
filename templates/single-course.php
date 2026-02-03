@@ -10,7 +10,7 @@ $user_id = get_current_user_id();
 $has_access = SmartLearn_LMS_Access_Control::user_has_course_access( $course_id, $user_id );
 ?>
 
-<div class="smartlearn-course-single">
+<div class="smartlearn-course-single" style="width:1000px;margin:0 auto;">
 	
 	<?php while ( have_posts() ) : the_post(); ?>
 		
@@ -45,7 +45,7 @@ $has_access = SmartLearn_LMS_Access_Control::user_has_course_access( $course_id,
 				
 				<div class="smartlearn-course-lessons-section">
 					<h2><?php _e( 'Уроки курсу', 'smartlearn-lms' ); ?></h2>
-					<?php SmartLearn_LMS_Templates::display_course_lessons( $course_id ); ?>
+					<?php SmartLearn_LMS_Templates::display_course_lessons( $course_id, true ); ?>
 				</div>
 				
 			<?php else : ?>

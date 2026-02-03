@@ -46,16 +46,27 @@ class SmartLearn_LMS_Templates {
 	 * @param int $course_id
 	 * @return array
 	 */
-	public static function get_course_lessons( $course_id ) {
-		$lessons = get_posts( array(
+	public static function get_course_lessons( $course_id, $only_free = false ) {
+		$args = array(
 			'post_type' => 'smartlearn_lesson',
 			'posts_per_page' => -1,
 			'meta_key' => '_smartlearn_lesson_course_id',
 			'meta_value' => $course_id,
 			'orderby' => 'menu_order',
 			'order' => 'ASC',
-		) );
-		
+		);
+
+		if ( $only_free ) {
+			$args['meta_query'] = array(
+				array(
+					'key' => '_smartlearn_lesson_is_free',
+					'value' => '1',
+					'compare' => '=',
+				),
+			);
+		}
+
+		$lessons = get_posts( $args );
 		return $lessons;
 	}
 	
@@ -64,8 +75,8 @@ class SmartLearn_LMS_Templates {
 	 *
 	 * @param int $course_id
 	 */
-	public static function display_course_lessons( $course_id ) {
-		$lessons = self::get_course_lessons( $course_id );
+	public static function display_course_lessons( $course_id, $only_free = false ) {
+		$lessons = self::get_course_lessons( $course_id, $only_free );
 		$user_id = get_current_user_id();
 		
 		if ( empty( $lessons ) ) {
@@ -75,12 +86,14 @@ class SmartLearn_LMS_Templates {
 		
 		echo '<div class="smartlearn-lessons-list">';
 		
+		$index = 0;
 		foreach ( $lessons as $lesson ) {
+			$index++;
 			$has_access = SmartLearn_LMS_Access_Control::user_has_lesson_access( $lesson->ID, $user_id );
 			$is_free = get_post_meta( $lesson->ID, '_smartlearn_lesson_is_free', true ) === '1';
 			$duration = get_post_meta( $lesson->ID, '_smartlearn_lesson_duration', true );
-			
-			$classes = array( '-lesson-item' );
+
+			$classes = array( 'smartlearn-lesson-item' );
 			if ( $has_access ) {
 				$classes[] = 'has-access';
 			} else {
@@ -89,39 +102,38 @@ class SmartLearn_LMS_Templates {
 			if ( $is_free ) {
 				$classes[] = 'is-free';
 			}
-			
+
 			echo '<div class="' . esc_attr( implode( ' ', $classes ) ) . '">';
-			
-			// Іконка
+
+			// Номер уроку
+			echo '<span class="smartlearn-lesson-number">' . esc_html( $index ) . '.</span>';
+
+			// Іконка доступу (замок для закритих)
 			echo '<span class="smartlearn-lesson-icon">';
 			if ( $has_access ) {
-				echo '✓'; // Відкритий урок
+				echo '✓';
 			} else {
-				echo '🔒'; // Закритий урок
+				echo '🔒';
 			}
 			echo '</span>';
-			
-			// Назва
-			if ( $has_access ) {
-				echo '<a href="' . esc_url( get_permalink( $lesson->ID ) ) . '" class="smartlearn-lesson-title">';
-				echo esc_html( $lesson->post_title );
-				echo '</a>';
-			} else {
-				echo '<span class="smartlearn-lesson-title">';
-				echo esc_html( $lesson->post_title );
-				echo '</span>';
+
+			// Назва (даємо можливість клікати на заголовок навіть якщо урок заблокований,
+			// щоб потрапити на сторінку уроку, де з'явиться повідомлення про необхідність входу/купівлі)
+			$title_classes = 'smartlearn-lesson-title';
+			if ( ! $has_access ) {
+				$title_classes .= ' smartlearn-lesson-locked';
 			}
-			
+			echo '<a href="' . esc_url( get_permalink( $lesson->ID ) ) . '" class="' . esc_attr( $title_classes ) . '">';
+			echo esc_html( $lesson->post_title );
+			echo '</a>';
+
 			// Мітки
 			echo '<div class="smartlearn-lesson-meta">';
-			if ( $is_free ) {
-				echo '<span class="smartlearn-lesson-badge free">' . __( 'Безкоштовно', 'smartlearn-lms' ) . '</span>';
-			}
 			if ( $duration ) {
 				echo '<span class="smartlearn-lesson-duration">' . esc_html( $duration ) . '</span>';
 			}
 			echo '</div>';
-			
+
 			echo '</div>';
 		}
 		

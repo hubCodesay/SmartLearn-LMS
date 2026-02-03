@@ -156,12 +156,20 @@
 .smartlearn-course-button {
   display: inline-block;
   padding: 10px 20px;
-  background: #0073aa;
-  color: #fff;
+  background-color: var(--btn-accented-bgcolor, #0073aa);
+  color: var(--btn-accented-color, #fff);
   text-decoration: none;
-  border-radius: 4px;
+  border-radius: var(--btn-accented-brd-radius, 0px);
+  box-shadow: var(--btn-accented-box-shadow, none);
+  text-transform: var(
+    --btn-accented-transform,
+    var(--btn-transform, uppercase)
+  );
+  font-weight: var(--btn-accented-font-weight, var(--btn-font-weight, 600));
+  font-family: var(--btn-accented-font-family, var(--btn-font-family, inherit));
+  font-style: var(--btn-accented-font-style, var(--btn-font-style, unset));
+  width: 100%;
   font-size: 14px;
-  font-weight: 600;
   transition: background 0.3s ease;
 }
 
@@ -183,6 +191,62 @@
   max-width: 1000px;
   margin: 0 auto;
   padding: 40px 20px;
+}
+
+/* My Account - Courses */
+.woocommerce-account .smartlearn-my-courses-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 18px;
+  margin-top: 16px;
+}
+
+.woocommerce-account .smartlearn-my-course-item {
+  background: var(--bgcolor-white, #fff);
+  border: 1px solid var(--brdcolor-gray-300, #e0e0e0);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.woocommerce-account .smartlearn-my-course-thumb img {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.woocommerce-account .smartlearn-my-course-body {
+  padding: 14px 14px 16px;
+}
+
+.woocommerce-account .smartlearn-my-course-title {
+  display: block;
+  font-weight: 700;
+  color: var(--wd-title-color, #111);
+  text-decoration: none;
+  margin-bottom: 6px;
+}
+
+.woocommerce-account .smartlearn-my-course-title:hover {
+  color: var(--wd-primary-color, #667eea);
+}
+
+.woocommerce-account .smartlearn-my-course-meta {
+  font-size: 13px;
+  color: var(--color-gray-600, #777);
+  margin-bottom: 12px;
+}
+
+.woocommerce-account .smartlearn-my-course-button {
+  width: 100%;
+  text-align: center;
+}
+
+@media (max-width: 1024px) {
+  .woocommerce-account .smartlearn-my-courses-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 520px) {
+  .woocommerce-account .smartlearn-my-courses-grid { grid-template-columns: 1fr; }
 }
 
 .smartlearn-course-header {
@@ -225,76 +289,117 @@
 
 .smartlearn-course-lessons-section h2 {
   font-size: 24px;
-  margin-bottom: 20px;
+  margin-bottom: 18px;
+  color: var(--wd-title-color, #111);
+  font-weight: var(--wd-title-font-weight, 600);
+  position: relative;
+  padding-bottom: 12px;
+}
+
+.smartlearn-course-lessons-section h2:after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 64px;
+  height: 2px;
+  background: var(--wd-primary-color, #667eea);
+  border-radius: 2px;
+  opacity: 0.9;
 }
 
 /* Lessons List */
 .smartlearn-lessons-list {
-  border: 1px solid #e0e0e0;
-  border-radius: 8px;
+  background: var(--bgcolor-white, #fff);
+  border: 1px solid var(--brdcolor-gray-300, #e6e6e6);
+  border-radius: var(--wd-brd-radius, 12px);
   overflow: hidden;
+  box-shadow: 0 1px 8px rgba(0, 0, 0, 0.04);
 }
 
-.smartlearn-lesson-item {
+.smartlearn-lessons-list > .smartlearn-lesson-item,
+.smartlearn-lessons-list > .-lesson-item {
   display: flex;
   align-items: center;
-  gap: 15px;
-  padding: 15px 20px;
-  border-bottom: 1px solid #e0e0e0;
-  transition: background 0.2s ease;
+  gap: 14px;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--brdcolor-gray-200, #f0f0f0);
+  background: var(--bgcolor-white, #fff);
+  transition: background 0.2s ease, padding-left 0.2s ease, box-shadow 0.2s ease;
+  box-shadow: inset 2px 0 0 transparent;
 }
 
-.smartlearn-lesson-item:last-child {
+.smartlearn-lessons-list > .smartlearn-lesson-item:last-child,
+.smartlearn-lessons-list > .-lesson-item:last-child {
   border-bottom: none;
 }
 
-.smartlearn-lesson-item:hover {
-  background: #f9f9f9;
+.smartlearn-lessons-list > .smartlearn-lesson-item:hover,
+.smartlearn-lessons-list > .-lesson-item:hover {
+  background: var(--bgcolor-gray-100, #f7f7f7);
+  padding-left: 22px;
+  box-shadow: inset 2px 0 0 var(--wd-primary-color, #667eea);
 }
 
-.smartlearn-lesson-item.no-access {
-  opacity: 0.6;
+.smartlearn-lessons-list > .smartlearn-lesson-item.has-access,
+.smartlearn-lessons-list > .-lesson-item.has-access {
+  box-shadow: inset 2px 0 0 var(--wd-primary-color, #667eea);
+}
+
+.smartlearn-lessons-list > .smartlearn-lesson-item.no-access,
+.smartlearn-lessons-list > .-lesson-item.no-access {
+  opacity: 0.55;
 }
 
 .smartlearn-lesson-icon {
-  font-size: 18px;
-  flex-shrink: 0;
+  display: none;
+}
+
+.smartlearn-lesson-number {
+  display: none;
 }
 
 .smartlearn-lesson-title {
   flex: 1;
   font-weight: 500;
   font-size: 16px;
-}
-
-.smartlearn-lesson-title a {
-  color: #333;
+  line-height: 1.35;
+  color: var(--color-gray-900, #111);
   text-decoration: none;
+  margin: 0;
 }
 
-.smartlearn-lesson-title a:hover {
-  color: #0073aa;
+a.smartlearn-lesson-title:hover {
+  color: var(--wd-primary-color, #667eea);
+  text-decoration: none;
 }
 
 .smartlearn-lesson-meta {
   display: flex;
   gap: 10px;
   align-items: center;
+  font-size: 13px;
+  color: var(--color-gray-600, #777);
+}
+
+.smartlearn-lesson-meta:empty {
+  display: none;
 }
 
 .smartlearn-lesson-badge {
-  padding: 3px 8px;
-  background: #46b450;
-  color: #fff;
-  border-radius: 3px;
+  padding: 3px 10px;
+  background: var(--bgcolor-gray-100, #f3f4f6);
+  color: var(--color-gray-800, #444);
+  border-radius: 999px;
   font-size: 11px;
   font-weight: 600;
   text-transform: uppercase;
+  letter-spacing: 0.02em;
 }
 
 .smartlearn-lesson-duration {
   font-size: 13px;
-  color: #666;
+  color: var(--color-gray-600, #777);
 }
 
 /* Single Lesson */
@@ -367,8 +472,9 @@
 
 .smartlearn-lesson-navigation .button {
   padding: 10px 20px;
-  background: #0073aa;
-  color: #fff;
+  /* Background color controlled by CSS variable --smartlearn-lesson-nav-btn-bg */
+  background: var(--smartlearn-lesson-nav-btn-bg, #0073aa);
+  color: var(--smartlearn-lesson-nav-btn-color, #fff);
   text-decoration: none;
   border-radius: 4px;
   font-size: 14px;
@@ -377,8 +483,8 @@
 }
 
 .smartlearn-lesson-navigation .button:hover {
-  background: #005a87;
-  color: #fff;
+  background: var(--smartlearn-lesson-nav-btn-bg-hover, #005a87);
+  color: var(--smartlearn-lesson-nav-btn-color-hover, #fff);
 }
 
 /* Access Denied */

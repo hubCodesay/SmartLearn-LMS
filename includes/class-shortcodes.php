@@ -13,6 +13,9 @@ class SmartLearn_LMS_Shortcodes {
 		add_shortcode( 'courses_list', array( $this, 'courses_list' ) );
 		add_shortcode( 'course_lessons', array( $this, 'course_lessons' ) );
 		add_action( 'wp_enqueue_scripts', array( $this, 'enqueue_styles' ) );
+		// Admin settings for styling
+		add_action( 'admin_menu', array( $this, 'add_settings_page' ) );
+		add_action( 'admin_init', array( $this, 'register_settings' ) );
 	}
 	
 	/**
@@ -48,6 +51,118 @@ class SmartLearn_LMS_Shortcodes {
 			}
 		';
 		wp_add_inline_style( 'smartlearn-lms-frontend', $inline_css );
+
+		// Inject CSS variables from options (allow admin to control button background)
+		$btn_bg = get_option( 'smartlearn_lms_button_bg', '#B8B7FD' );
+		$btn_text = get_option( 'smartlearn_lms_button_text_color', '#ffffff' );
+		$btn_hover = get_option( 'smartlearn_lms_button_hover_bg', '' );
+		$btn_font = get_option( 'smartlearn_lms_button_font_family', '' );
+		$btn_size = get_option( 'smartlearn_lms_button_font_size', '' );
+		$css_vars = "
+.smartlearn-courses-grid, .smartlearn-course-single, .smartlearn-lesson-navigation, .smartlearn-access-denied, .smartlearn-course-locked {\n"
+			. "  --btn-accented-bgcolor: {$btn_bg};\n"
+			. "  --btn-accented-color: {$btn_text};\n";
+		if ( $btn_hover ) {
+			$css_vars .= "  --btn-accented-bg-hover: " . esc_attr( $btn_hover ) . ";\n";
+		}
+		if ( $btn_font ) {
+			$css_vars .= "  --btn-accented-font-family: " . esc_attr( $btn_font ) . ";\n";
+		}
+		if ( $btn_size ) {
+			$css_vars .= "  --btn-accented-font-size: " . esc_attr( intval( $btn_size ) ) . "px;\n";
+		}
+		$css_vars .= "}\n";
+
+		wp_add_inline_style( 'smartlearn-lms-frontend', $css_vars );
+	}
+
+	/**
+	 * Register admin settings
+	 */
+	public function register_settings() {
+		register_setting( 'smartlearn_lms_styles', 'smartlearn_lms_button_bg', 'sanitize_hex_color' );
+		register_setting( 'smartlearn_lms_styles', 'smartlearn_lms_button_text_color', 'sanitize_hex_color' );
+		register_setting( 'smartlearn_lms_styles', 'smartlearn_lms_button_hover_bg', 'sanitize_hex_color' );
+		register_setting( 'smartlearn_lms_styles', 'smartlearn_lms_button_font_family', 'sanitize_text_field' );
+		register_setting( 'smartlearn_lms_styles', 'smartlearn_lms_button_font_size', 'absint' );
+	}
+
+	/**
+	 * Add settings page under Settings
+	 */
+	public function add_settings_page() {
+		add_options_page(
+			__( 'SmartLearn Styles', 'smartlearn-lms' ),
+			__( 'SmartLearn Styles', 'smartlearn-lms' ),
+			'manage_options',
+			'smartlearn-lms-styles',
+			array( $this, 'settings_page' ),
+		);
+	}
+
+	/**
+	 * Render settings page
+	 */
+	public function settings_page() {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			return;
+		}
+
+		$btn_bg = get_option( 'smartlearn_lms_button_bg', '#B8B7FD' );
+		?>
+		<div class="wrap">
+			<h1><?php _e( 'SmartLearn Styles', 'smartlearn-lms' ); ?></h1>
+			<form method="post" action="options.php">
+				<?php settings_fields( 'smartlearn_lms_styles' ); ?>
+				<?php do_settings_sections( 'smartlearn_lms_styles' ); ?>
+				<table class="form-table">
+					<tr>
+						<th scope="row"><label for="smartlearn_lms_button_bg"><?php _e( 'Button background', 'smartlearn-lms' ); ?></label></th>
+						<td>
+							<input type="text" id="smartlearn_lms_button_bg" name="smartlearn_lms_button_bg" value="<?php echo esc_attr( $btn_bg ); ?>" class="regular-text" />
+							<input type="color" id="smartlearn_lms_button_bg_color" value="<?php echo esc_attr( $btn_bg ); ?>" style="margin-left:8px;vertical-align:middle;" onchange="document.getElementById('smartlearn_lms_button_bg').value = this.value;" />
+							<p class="description"><?php _e( 'Set the background color used for plugin buttons.', 'smartlearn-lms' ); ?></p>
+						</td>
+					</tr>
+					<tr>
+						<th scope="row"><label for="smartlearn_lms_button_hover_bg"><?php _e( 'Button hover background', 'smartlearn-lms' ); ?></label></th>
+						<td>
+							<?php $hover = get_option( 'smartlearn_lms_button_hover_bg', '' ); ?>
+							<input type="text" id="smartlearn_lms_button_hover_bg" name="smartlearn_lms_button_hover_bg" value="<?php echo esc_attr( $hover ); ?>" class="regular-text" />
+							<input type="color" id="smartlearn_lms_button_hover_bg_color" value="<?php echo esc_attr( $hover ?: '#000000' ); ?>" style="margin-left:8px;vertical-align:middle;" onchange="document.getElementById('smartlearn_lms_button_hover_bg').value = this.value;" />
+							<p class="description"><?php _e( 'Optional hover color for plugin buttons.', 'smartlearn-lms' ); ?></p>
+						</td>
+					</tr>
+					<tr>
+						<th scope="row"><label for="smartlearn_lms_button_text_color"><?php _e( 'Button text color', 'smartlearn-lms' ); ?></label></th>
+						<td>
+							<?php $txt = get_option( 'smartlearn_lms_button_text_color', '#ffffff' ); ?>
+							<input type="text" id="smartlearn_lms_button_text_color" name="smartlearn_lms_button_text_color" value="<?php echo esc_attr( $txt ); ?>" class="regular-text" />
+							<input type="color" id="smartlearn_lms_button_text_color_color" value="<?php echo esc_attr( $txt ); ?>" style="margin-left:8px;vertical-align:middle;" onchange="document.getElementById('smartlearn_lms_button_text_color').value = this.value;" />
+							<p class="description"><?php _e( 'Set the text color used inside plugin buttons.', 'smartlearn-lms' ); ?></p>
+						</td>
+					</tr>
+					<tr>
+						<th scope="row"><label for="smartlearn_lms_button_font_family"><?php _e( 'Button font family', 'smartlearn-lms' ); ?></label></th>
+						<td>
+							<?php $font = get_option( 'smartlearn_lms_button_font_family', '' ); ?>
+							<input type="text" id="smartlearn_lms_button_font_family" name="smartlearn_lms_button_font_family" value="<?php echo esc_attr( $font ); ?>" class="regular-text" placeholder="e.g. 'Inter, Arial, sans-serif'" />
+							<p class="description"><?php _e( 'Font family for plugin buttons. Provide CSS font-family string.', 'smartlearn-lms' ); ?></p>
+						</td>
+					</tr>
+					<tr>
+						<th scope="row"><label for="smartlearn_lms_button_font_size"><?php _e( 'Button font size (px)', 'smartlearn-lms' ); ?></label></th>
+						<td>
+							<?php $size = get_option( 'smartlearn_lms_button_font_size', 14 ); ?>
+							<input type="number" id="smartlearn_lms_button_font_size" name="smartlearn_lms_button_font_size" value="<?php echo esc_attr( $size ); ?>" class="small-text" min="8" max="72" /> px
+							<p class="description"><?php _e( 'Font size for plugin buttons in pixels.', 'smartlearn-lms' ); ?></p>
+						</td>
+					</tr>
+				</table>
+				<?php submit_button(); ?>
+			</form>
+		</div>
+		<?php
 	}
 	
 	/**
@@ -182,10 +297,18 @@ class SmartLearn_LMS_Shortcodes {
 				echo '</div>';
 			}
 			
-			// Кнопка доступу
-			echo '<div class="smartlearn-course-button-wrap">';
-			echo SmartLearn_LMS_Access_Control::get_course_access_button( $course_id );
-			echo '</div>';
+			// Клас обгортки та стандартна кнопка (повернення до оригінальної розмітки)
+			$wrapper_classes = 'smartlearn-course-button-wrap';
+			echo '<div class="' . esc_attr( $wrapper_classes ) . '">';
+			$view_label = get_option( 'smartlearn_lms_button_text_view', __( 'Переглянути', 'smartlearn-lms' ) );
+			$btn_class = 'button smartlearn-course-button login-button';
+			echo sprintf(
+				'<a href="%s" class="%s"><span class="smartlearn-button-label">%s</span></a>',
+				esc_url( get_permalink( $course_id ) ),
+				esc_attr( $btn_class ),
+				esc_html( $view_label )
+			);
+			echo '</div>'; 
 			
 			echo '</div>'; // .smartlearn-course-content
 			

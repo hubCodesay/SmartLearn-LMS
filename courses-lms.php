@@ -1,9 +1,9 @@
 <?php
 /**
- * Plugin Name: SmartLearn LMS
+ * Plugin Name: Sowa Courses LMS
  * Plugin URI: https://stabion.studio/plugins/smartlearn-lms
  * Description: Professional Learning Management System with full WooCommerce integration for selling online courses. Create courses, add lessons, embed videos, control access and monetize your educational content.
- * Version: 1.0.3
+ * Version: 1.0.0
  * Author: Stabion Studio
  * Author URI: https://stabion.studio
  * Text Domain: smartlearn-lms
@@ -89,16 +89,24 @@ class SmartLearn_Courses_LMS {
 		require_once SMARTLEARN_LMS_PATH . 'includes/class-post-types.php';
 		require_once SMARTLEARN_LMS_PATH . 'includes/class-meta-boxes.php';
 		require_once SMARTLEARN_LMS_PATH . 'includes/class-access-control.php';
+		require_once SMARTLEARN_LMS_PATH . 'includes/class-admin-access-reports.php';
 		require_once SMARTLEARN_LMS_PATH . 'includes/class-templates.php';
 		require_once SMARTLEARN_LMS_PATH . 'includes/class-shortcodes.php';
+		if ( ! class_exists( 'SmartLearn_LMS_My_Account' ) ) {
+			require_once SMARTLEARN_LMS_PATH . 'includes/class-my-account.php';
+		}
 		require_once SMARTLEARN_LMS_PATH . 'includes/class-settings.php';
 		
 		// Initialize components
 		new SmartLearn_LMS_Post_Types();
 		new SmartLearn_LMS_Meta_Boxes();
 		// Access_Control має тільки статичні методи - не потрібно ініціалізувати
+		new SmartLearn_LMS_Admin_Access_Reports();
 		new SmartLearn_LMS_Templates();
 		new SmartLearn_LMS_Shortcodes();
+		if ( class_exists( 'SmartLearn_LMS_My_Account' ) ) {
+			new SmartLearn_LMS_My_Account();
+		}
 		new SmartLearn_LMS_Settings();
 	}
 	
@@ -106,6 +114,9 @@ class SmartLearn_Courses_LMS {
 		// Register post types before flushing rewrite rules
 		$post_types = new SmartLearn_LMS_Post_Types();
 		$post_types->register_post_types();
+
+		// Register My Account endpoint before flushing rewrite rules
+		add_rewrite_endpoint( 'smartlearn-courses', EP_ROOT | EP_PAGES );
 		
 		flush_rewrite_rules();
 		
