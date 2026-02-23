@@ -33,13 +33,32 @@ class SmartLearn_LMS_Settings {
 	 * Реєструвати налаштування
 	 */
 	public function register_settings() {
+		// General
 		register_setting( 'smartlearn_lms_settings', 'smartlearn_lms_login_url' );
 		register_setting( 'smartlearn_lms_settings', 'smartlearn_lms_courses_per_page' );
 		register_setting( 'smartlearn_lms_settings', 'smartlearn_lms_default_columns' );
+		register_setting( 'smartlearn_lms_settings', 'smartlearn_lms_language' );
+
+		// Button Texts
 		register_setting( 'smartlearn_lms_settings', 'smartlearn_lms_button_text_view' );
 		register_setting( 'smartlearn_lms_settings', 'smartlearn_lms_button_text_buy' );
 		register_setting( 'smartlearn_lms_settings', 'smartlearn_lms_button_text_login' );
-		register_setting( 'smartlearn_lms_settings', 'smartlearn_lms_language' );
+
+		// Card Design Settings
+		register_setting( 'smartlearn_lms_settings', 'smartlearn_lms_card_layout' );
+		register_setting( 'smartlearn_lms_settings', 'smartlearn_lms_image_aspect' );
+		register_setting( 'smartlearn_lms_settings', 'smartlearn_lms_card_bg' );
+		register_setting( 'smartlearn_lms_settings', 'smartlearn_lms_card_radius' );
+		register_setting( 'smartlearn_lms_settings', 'smartlearn_lms_card_border' );
+		register_setting( 'smartlearn_lms_settings', 'smartlearn_lms_title_color' );
+		register_setting( 'smartlearn_lms_settings', 'smartlearn_lms_text_color' );
+		register_setting( 'smartlearn_lms_settings', 'smartlearn_lms_meta_color' );
+		
+		// Button Design Settings
+		register_setting( 'smartlearn_lms_settings', 'smartlearn_lms_btn_bg' );
+		register_setting( 'smartlearn_lms_settings', 'smartlearn_lms_btn_text_color' );
+		register_setting( 'smartlearn_lms_settings', 'smartlearn_lms_btn_hover_bg' );
+		register_setting( 'smartlearn_lms_settings', 'smartlearn_lms_btn_radius' );
 	}
 	
 	/**
@@ -56,410 +75,487 @@ class SmartLearn_LMS_Settings {
 			array(), 
 			SMARTLEARN_LMS_VERSION 
 		);
+		
+		wp_enqueue_style( 'wp-color-picker' );
+		wp_enqueue_script( 'wp-color-picker' );
+		wp_enqueue_script( 'jquery-ui-sortable' );
 	}
 	
 	/**
 	 * Відобразити сторінку налаштувань
 	 */
 	public function render_settings_page() {
+		// Отримуємо збережені налаштування для прев'ю
+		$opts = array(
+			'card_layout' => get_option('smartlearn_lms_card_layout', 'thumbnail:1,category:1,title:1,meta:1,excerpt:1,button:1'),
+			'image_aspect' => get_option('smartlearn_lms_image_aspect', '16/9'),
+			'card_bg' => get_option('smartlearn_lms_card_bg', '#ffffff'),
+			'card_radius' => get_option('smartlearn_lms_card_radius', '8'),
+			'card_border' => get_option('smartlearn_lms_card_border', '#e0e0e0'),
+			'title_color' => get_option('smartlearn_lms_title_color', '#1d2327'),
+			'text_color' => get_option('smartlearn_lms_text_color', '#3c434a'),
+			'meta_color' => get_option('smartlearn_lms_meta_color', '#646970'),
+			'btn_bg' => get_option('smartlearn_lms_btn_bg', '#2271b1'),
+			'btn_text_color' => get_option('smartlearn_lms_btn_text_color', '#ffffff'),
+			'btn_hover_bg' => get_option('smartlearn_lms_btn_hover_bg', '#135e96'),
+			'btn_radius' => get_option('smartlearn_lms_btn_radius', '4'),
+			'btn_text_view' => get_option('smartlearn_lms_button_text_view', __('Переглянути курс', 'smartlearn-lms')),
+		);
 		?>
+		<style>
+			.nav-tab-wrapper { margin-bottom: 20px; }
+			.tab-content { display: none; }
+			.tab-content.active { display: block; }
+			
+			/* Live Preview Styles */
+			.live-preview-container {
+				position: sticky;
+				top: 40px;
+				background: #f0f0f1;
+				padding: 20px;
+				border-radius: 8px;
+				border: 1px dashed #ccc;
+			}
+			#preview-card {
+				display: flex;
+				flex-direction: column;
+				max-width: 350px;
+				margin: 0 auto;
+				overflow: hidden;
+				transition: all 0.3s;
+			}
+			#preview-card .preview-thumb {
+				background-color: #ddd;
+				background-image: url('https://via.placeholder.com/600x400?text=Course+Image');
+				background-size: cover;
+				background-position: center;
+				width: 100%;
+			}
+			#preview-card .preview-content {
+				padding: 20px;
+				display: flex;
+				flex-direction: column;
+				gap: 10px;
+				/* This will allow items to change order */
+				display: contents; 
+			}
+			/* Elements inside card */
+			#preview-card {
+				display: flex;
+				flex-direction: column;
+				max-width: 350px;
+				margin: 0 auto;
+				overflow: hidden;
+				transition: all 0.3s;
+				padding: 20px;
+				gap: 10px;
+			}
+			#preview-card > * { width: 100%; }
+			#preview-card .preview-thumb-wrap { margin: 0 -20px; width: calc(100% + 40px); }
+			
+			/* Drag and drop sorting */
+			#sl-card-layout-list { list-style: none; padding: 0; margin: 0; max-width: 400px; }
+			#sl-card-layout-list li { background: #fff; border: 1px solid #ccd0d4; padding: 10px 15px; margin-bottom: 8px; cursor: move; display: flex; align-items: center; border-radius: 4px; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
+			#sl-card-layout-list li:hover { border-color: #999; }
+			#sl-card-layout-list li .dashicons { margin-right: 15px; color: #a4a9ad; cursor: grab; }
+			#sl-card-layout-list li label { margin: 0; display:flex; align-items:center; cursor:pointer; width: 100%; font-weight: 500; }
+			#sl-card-layout-list li input { margin-right: 10px; }
+			#preview-title { font-size: 18px; font-weight: bold; margin: 0; }
+			#preview-meta { font-size: 13px; display: flex; gap: 10px; }
+			#preview-excerpt { font-size: 14px; line-height: 1.5; margin: 0; }
+			#preview-btn {
+				display: inline-block;
+				padding: 10px 20px;
+				text-align: center;
+				text-decoration: none;
+				font-weight: 500;
+				margin-top: 10px;
+				transition: background 0.2s;
+				align-self: flex-start;
+			}
+			#preview-btn:hover { background-color: var(--hover-bg); }
+		</style>
+		
 		<div class="wrap smartlearn-lms-settings-wrap">
 			<h1>
 				<span class="dashicons dashicons-welcome-learn-more"></span>
-				<?php _e( 'SmartLearn LMS', 'smartlearn-lms' ); ?>
+				<?php _e( 'SmartLearn LMS Налаштування', 'smartlearn-lms' ); ?>
 			</h1>
 			
-			<div class="smartlearn-lms-settings-container">
+			<h2 class="nav-tab-wrapper">
+				<a href="#tab-general" class="nav-tab nav-tab-active"><?php _e('Основні', 'smartlearn-lms'); ?></a>
+				<a href="#tab-texts" class="nav-tab"><?php _e('Тексти кнопок', 'smartlearn-lms'); ?></a>
+				<a href="#tab-design" class="nav-tab"><?php _e('Дизайн карток (Прев\'ю)', 'smartlearn-lms'); ?></a>
+				<a href="#tab-instructions" class="nav-tab"><?php _e('Інструкції', 'smartlearn-lms'); ?></a>
+			</h2>
+			
+			<form method="post" action="options.php">
+				<?php settings_fields( 'smartlearn_lms_settings' ); ?>
 				
-				<!-- Основні налаштування -->
-				<div class="smartlearn-lms-settings-main">
+				<div class="smartlearn-lms-settings-container">
 					
-					<div class="smartlearn-lms-card">
-						<h2><?php _e( '⚙️ Налаштування', 'smartlearn-lms' ); ?></h2>
+					<!-- Ліва колонка (Налаштування) -->
+					<div class="smartlearn-lms-settings-main">
 						
-						<form method="post" action="options.php">
-							<?php settings_fields( 'smartlearn_lms_settings' ); ?>
-							
+						<!-- TAB 1: General -->
+						<div id="tab-general" class="tab-content active smartlearn-lms-card">
+							<h2><?php _e( '⚙️ Основні налаштування', 'smartlearn-lms' ); ?></h2>
 							<table class="form-table">
 								<tr>
-									<th scope="row">
-										<label for="smartlearn_lms_login_url">
-											<?php _e( 'URL сторінки входу', 'smartlearn-lms' ); ?>
-										</label>
-									</th>
+									<th scope="row"><label for="smartlearn_lms_login_url"><?php _e( 'URL сторінки входу', 'smartlearn-lms' ); ?></label></th>
 									<td>
-										<input 
-											type="url" 
-											id="smartlearn_lms_login_url" 
-											name="smartlearn_lms_login_url" 
-											value="<?php echo esc_attr( get_option( 'smartlearn_lms_login_url', 'https://www.smartlearn-shopchik.com/my-account/' ) ); ?>" 
-											class="regular-text"
-										>
-										<p class="description">
-											<?php _e( 'URL на який будуть перенаправлятися неавторизовані користувачі', 'smartlearn-lms' ); ?>
-										</p>
+										<input type="url" id="smartlearn_lms_login_url" name="smartlearn_lms_login_url" value="<?php echo esc_attr( get_option( 'smartlearn_lms_login_url', 'https://www.smartlearn-shopchik.com/my-account/' ) ); ?>" class="regular-text">
+										<p class="description"><?php _e( 'URL на який будуть перенаправлятися неавторизовані користувачі', 'smartlearn-lms' ); ?></p>
 									</td>
 								</tr>
-								
 								<tr>
-									<th scope="row">
-										<label for="smartlearn_lms_courses_per_page">
-											<?php _e( 'Курсів на сторінку', 'smartlearn-lms' ); ?>
-										</label>
-									</th>
+									<th scope="row"><label for="smartlearn_lms_courses_per_page"><?php _e( 'Курсів на сторінку', 'smartlearn-lms' ); ?></label></th>
 									<td>
-										<input 
-											type="number" 
-											id="smartlearn_lms_courses_per_page" 
-											name="smartlearn_lms_courses_per_page" 
-											value="<?php echo esc_attr( get_option( 'smartlearn_lms_courses_per_page', '9' ) ); ?>" 
-											min="-1"
-											class="small-text"
-										>
-										<p class="description">
-											<?php _e( 'Кількість курсів у шорткоді за замовчуванням (-1 = всі)', 'smartlearn-lms' ); ?>
-										</p>
+										<input type="number" id="smartlearn_lms_courses_per_page" name="smartlearn_lms_courses_per_page" value="<?php echo esc_attr( get_option( 'smartlearn_lms_courses_per_page', '9' ) ); ?>" min="-1" class="small-text">
 									</td>
 								</tr>
-								
 								<tr>
-									<th scope="row">
-										<label for="smartlearn_lms_default_columns">
-											<?php _e( 'Колонок за замовчуванням', 'smartlearn-lms' ); ?>
-										</label>
-									</th>
+									<th scope="row"><label for="smartlearn_lms_default_columns"><?php _e( 'Колонок за замовчуванням', 'smartlearn-lms' ); ?></label></th>
 									<td>
 										<select id="smartlearn_lms_default_columns" name="smartlearn_lms_default_columns">
 											<?php
 											$columns = get_option( 'smartlearn_lms_default_columns', '3' );
 											for ( $i = 1; $i <= 4; $i++ ) {
-												printf(
-													'<option value="%d" %s>%d</option>',
-													$i,
-													selected( $columns, $i, false ),
-													$i
-												);
+												printf('<option value="%d" %s>%d</option>', $i, selected( $columns, $i, false ), $i);
 											}
 											?>
 										</select>
-										<p class="description">
-											<?php _e( 'Кількість колонок у сітці курсів', 'smartlearn-lms' ); ?>
-										</p>
 									</td>
 								</tr>
-								
 								<tr>
-									<th scope="row">
-										<label for="smartlearn_lms_language">
-											<?php _e( 'Мова плагіна', 'smartlearn-lms' ); ?>
-										</label>
-									</th>
+									<th scope="row"><label for="smartlearn_lms_language"><?php _e( 'Мова плагіна', 'smartlearn-lms' ); ?></label></th>
 									<td>
 										<select id="smartlearn_lms_language" name="smartlearn_lms_language">
 											<?php
 											$current_lang = get_option( 'smartlearn_lms_language', 'uk' );
-											$languages = array(
-												'uk' => 'Українська',
-												'ru' => 'Русский',
-												'en' => 'English'
-											);
+											$languages = array('uk' => 'Українська', 'ru' => 'Русский', 'en' => 'English');
 											foreach ( $languages as $code => $name ) {
-												printf(
-													'<option value="%s" %s>%s</option>',
-													esc_attr( $code ),
-													selected( $current_lang, $code, false ),
-													esc_html( $name )
-												);
+												printf('<option value="%s" %s>%s</option>', esc_attr( $code ), selected( $current_lang, $code, false ), esc_html( $name ));
 											}
 											?>
 										</select>
-										<p class="description">
-											<?php _e( 'Виберіть мову інтерфейсу плагіна', 'smartlearn-lms' ); ?>
-										</p>
-									</td>
-								</tr>
-								
-								<tr>
-									<th scope="row">
-										<?php _e( 'Тексти кнопок', 'smartlearn-lms' ); ?>
-									</th>
-									<td>
-										<fieldset>
-											<label for="smartlearn_lms_button_text_view">
-												<?php _e( 'Переглянути курс:', 'smartlearn-lms' ); ?>
-											</label>
-											<br>
-											<input 
-												type="text" 
-												id="smartlearn_lms_button_text_view" 
-												name="smartlearn_lms_button_text_view" 
-												value="<?php echo esc_attr( get_option( 'smartlearn_lms_button_text_view', __( 'Переглянути курс', 'smartlearn-lms' ) ) ); ?>" 
-												class="regular-text"
-											>
-											<br><br>
-											
-											<label for="smartlearn_lms_button_text_buy">
-												<?php _e( 'Купити курс:', 'smartlearn-lms' ); ?>
-											</label>
-											<br>
-											<input 
-												type="text" 
-												id="smartlearn_lms_button_text_buy" 
-												name="smartlearn_lms_button_text_buy" 
-												value="<?php echo esc_attr( get_option( 'smartlearn_lms_button_text_buy', __( 'Купити курс', 'smartlearn-lms' ) ) ); ?>" 
-												class="regular-text"
-											>
-											<br><br>
-											
-											<label for="smartlearn_lms_button_text_login">
-												<?php _e( 'Увійти:', 'smartlearn-lms' ); ?>
-											</label>
-											<br>
-											<input 
-												type="text" 
-												id="smartlearn_lms_button_text_login" 
-												name="smartlearn_lms_button_text_login" 
-												value="<?php echo esc_attr( get_option( 'smartlearn_lms_button_text_login', __( 'Увійти', 'smartlearn-lms' ) ) ); ?>" 
-												class="regular-text"
-											>
-										</fieldset>
 									</td>
 								</tr>
 							</table>
-							
-							<?php submit_button(); ?>
-						</form>
-					</div>
-					
-					<!-- Інструкції -->
-					<div class="smartlearn-lms-card">
-						<h2><?php _e( '📖 Як використовувати', 'smartlearn-lms' ); ?></h2>
-						
-						<div class="smartlearn-instructions">
-							<h3><?php _e( '1. Створення курсу', 'smartlearn-lms' ); ?></h3>
-							<ol>
-								<li><?php _e( 'Перейдіть в меню "Курси → Додати новий"', 'smartlearn-lms' ); ?></li>
-								<li><?php _e( 'Введіть назву та опис курсу', 'smartlearn-lms' ); ?></li>
-								<li><?php _e( 'Виберіть товар WooCommerce або зробіть курс безкоштовним', 'smartlearn-lms' ); ?></li>
-								<li><?php _e( 'Додайте зображення курсу (рекомендовано)', 'smartlearn-lms' ); ?></li>
-								<li><?php _e( 'Натисніть "Опублікувати"', 'smartlearn-lms' ); ?></li>
-							</ol>
-							
-							<h3><?php _e( '2. Додавання уроків', 'smartlearn-lms' ); ?></h3>
-							<ol>
-								<li><?php _e( 'Перейдіть в меню "Уроки → Додати новий"', 'smartlearn-lms' ); ?></li>
-								<li><?php _e( 'Виберіть курс, до якого належить урок', 'smartlearn-lms' ); ?></li>
-								<li><?php _e( 'Додайте відео URL (YouTube, Vimeo) за бажанням', 'smartlearn-lms' ); ?></li>
-								<li><?php _e( 'Вкажіть чи урок безкоштовний (для preview)', 'smartlearn-lms' ); ?></li>
-							</ol>
-							
-							<h3><?php _e( '3. Шорткоди', 'smartlearn-lms' ); ?></h3>
-							
-							<h4><?php _e( 'Список всіх курсів:', 'smartlearn-lms' ); ?></h4>
-							<div class="smartlearn-code-block">
-								<code>[courses_list]</code>
-								<button class="button button-small copy-shortcode" data-clipboard="[courses_list]">
-									<?php _e( 'Копіювати', 'smartlearn-lms' ); ?>
-								</button>
-							</div>
-							
-							<h4><?php _e( 'Параметри шорткоду:', 'smartlearn-lms' ); ?></h4>
-							<ul class="smartlearn-params-list">
-								<li>
-									<strong>columns</strong> - <?php _e( 'кількість колонок (1-4)', 'smartlearn-lms' ); ?>
-									<div class="smartlearn-code-block">
-										<code>[courses_list columns="4"]</code>
-										<button class="button button-small copy-shortcode" data-clipboard='[courses_list columns="4"]'>
-											<?php _e( 'Копіювати', 'smartlearn-lms' ); ?>
-										</button>
-									</div>
-								</li>
-								<li>
-									<strong>category</strong> - <?php _e( 'slug категорії або декілька через кому', 'smartlearn-lms' ); ?>
-									<div class="smartlearn-code-block">
-										<code>[courses_list category="programming"]</code>
-										<button class="button button-small copy-shortcode" data-clipboard='[courses_list category="programming"]'>
-											<?php _e( 'Копіювати', 'smartlearn-lms' ); ?>
-										</button>
-									</div>
-								</li>
-								<li>
-									<strong>per_page</strong> - <?php _e( 'кількість курсів (-1 = всі)', 'smartlearn-lms' ); ?>
-									<div class="smartlearn-code-block">
-										<code>[courses_list per_page="6"]</code>
-										<button class="button button-small copy-shortcode" data-clipboard='[courses_list per_page="6"]'>
-											<?php _e( 'Копіювати', 'smartlearn-lms' ); ?>
-										</button>
-									</div>
-								</li>
-								<li>
-									<strong>orderby</strong> - <?php _e( 'сортування (date, title, menu_order)', 'smartlearn-lms' ); ?>
-									<div class="smartlearn-code-block">
-										<code>[courses_list orderby="title" order="ASC"]</code>
-										<button class="button button-small copy-shortcode" data-clipboard='[courses_list orderby="title" order="ASC"]'>
-											<?php _e( 'Копіювати', 'smartlearn-lms' ); ?>
-										</button>
-									</div>
-								</li>
-							</ul>
-							
-							<h4><?php _e( 'Список уроків курсу:', 'smartlearn-lms' ); ?></h4>
-							<div class="smartlearn-code-block">
-								<code>[course_lessons course_id="123"]</code>
-								<button class="button button-small copy-shortcode" data-clipboard='[course_lessons course_id="123"]'>
-									<?php _e( 'Копіювати', 'smartlearn-lms' ); ?>
-								</button>
-							</div>
-							
-							<h3><?php _e( '4. Стилізація', 'smartlearn-lms' ); ?></h3>
-							<p><?php _e( 'Плагін включає адаптивні стилі, які автоматично підлаштовуються під вашу тему. Основні CSS класи:', 'smartlearn-lms' ); ?></p>
-							<ul class="-css-list">
-								<li><code>.smartlearn-courses-grid</code> - <?php _e( 'сітка курсів', 'smartlearn-lms' ); ?></li>
-								<li><code>.smartlearn-course-item</code> - <?php _e( 'окремий курс', 'smartlearn-lms' ); ?></li>
-								<li><code>.smartlearn-course-button</code> - <?php _e( 'кнопка курсу', 'smartlearn-lms' ); ?></li>
-								<li><code>.smartlearn-lessons-list</code> - <?php _e( 'список уроків', 'smartlearn-lms' ); ?></li>
-								<li><code>.smartlearn-lesson-item</code> - <?php _e( 'окремий урок', 'smartlearn-lms' ); ?></li>
-								<li><code>.smartlearn-access-denied</code> - <?php _e( 'блок відсутності доступу', 'smartlearn-lms' ); ?></li>
-							</ul>
-							<p><?php _e( 'Ви можете перевизначити стилі у своїй темі для повної кастомізації.', 'smartlearn-lms' ); ?></p>
 						</div>
-					</div>
-				</div>
-				
-				<!-- Бічна панель -->
-				<div class="smartlearn-lms-settings-sidebar">
-					
-					<!-- Про плагін -->
-					<div class="smartlearn-lms-card -about">
-						<div class="-logo">
-							<span class="dashicons dashicons-welcome-learn-more"></span>
-						</div>
-						<h3>SmartLearn LMS</h3>
-						<p class="version"><?php printf( __( 'Версія %s', 'smartlearn-lms' ), SMARTLEARN_LMS_VERSION ); ?></p>
-						<p><?php _e( 'Професійна система управління онлайн-курсами з інтеграцією WooCommerce.', 'smartlearn-lms' ); ?></p>
-						
-						<div class="-stats">
-							<?php
-							$courses_count = wp_count_posts( 'smartlearn_course' )->publish;
-							$lessons_count = wp_count_posts( 'smartlearn_lesson' )->publish;
-							?>
-							<div class="stat-item">
-								<span class="stat-number"><?php echo esc_html( $courses_count ); ?></span>
-								<span class="stat-label"><?php _e( 'Курсів', 'smartlearn-lms' ); ?></span>
-							</div>
-							<div class="stat-item">
-								<span class="stat-number"><?php echo esc_html( $lessons_count ); ?></span>
-								<span class="stat-label"><?php _e( 'Уроків', 'smartlearn-lms' ); ?></span>
-							</div>
-						</div>
-					</div>
-					
-					<!-- Підтримка розробки -->
-					<div class="smartlearn-lms-card -donate">
-						<h3>
-							<span class="dashicons dashicons-heart"></span>
-							<?php _e( 'Підтримати розробку', 'smartlearn-lms' ); ?>
-						</h3>
-						<p><?php _e( 'Якщо вам подобається цей плагін і ви хочете підтримати його розвиток, буду вдячний за вашу допомогу!', 'smartlearn-lms' ); ?></p>
-						
-						<div class="donate-buttons">
-							<p class="donate-note">
-								<?php _e( 'Якщо ви хочете підтримати розробку плагіна, будемо дуже вдячні! Контакти для донатів:', 'smartlearn-lms' ); ?>
-							</p>
-							<p>
-								<strong>Email:</strong> <code>donate@stabion.studio</code><br>
-								<strong>Website:</strong> <a href="https://stabion.studio/donate/" target="_blank">stabion.studio/donate</a>
-							</p>
+
+						<!-- TAB 2: Text -->
+						<div id="tab-texts" class="tab-content smartlearn-lms-card">
+							<h2><?php _e( '📝 Тексти кнопок', 'smartlearn-lms' ); ?></h2>
+							<table class="form-table">
+								<tr>
+									<th scope="row"><label for="smartlearn_lms_button_text_view"><?php _e( 'Переглянути курс', 'smartlearn-lms' ); ?></label></th>
+									<td><input type="text" id="smartlearn_lms_button_text_view" name="smartlearn_lms_button_text_view" value="<?php echo esc_attr( $opts['btn_text_view'] ); ?>" class="regular-text sl-live-input" data-target="#preview-btn"></td>
+								</tr>
+								<tr>
+									<th scope="row"><label for="smartlearn_lms_button_text_buy"><?php _e( 'Купити курс', 'smartlearn-lms' ); ?></label></th>
+									<td><input type="text" id="smartlearn_lms_button_text_buy" name="smartlearn_lms_button_text_buy" value="<?php echo esc_attr( get_option( 'smartlearn_lms_button_text_buy', __( 'Купити курс', 'smartlearn-lms' ) ) ); ?>" class="regular-text"></td>
+								</tr>
+								<tr>
+									<th scope="row"><label for="smartlearn_lms_button_text_login"><?php _e( 'Увійти', 'smartlearn-lms' ); ?></label></th>
+									<td><input type="text" id="smartlearn_lms_button_text_login" name="smartlearn_lms_button_text_login" value="<?php echo esc_attr( get_option( 'smartlearn_lms_button_text_login', __( 'Увійти', 'smartlearn-lms' ) ) ); ?>" class="regular-text"></td>
+								</tr>
+							</table>
 						</div>
 						
-						<p class="thank-you">
-							<span class="dashicons dashicons-smiley"></span>
-							<?php _e( 'Дякую за підтримку!', 'smartlearn-lms' ); ?>
+						<!-- TAB 3: Design -->
+						<div id="tab-design" class="tab-content smartlearn-lms-card">
+							<h2><?php _e( '🎨 Дизайн карток та кнопок', 'smartlearn-lms' ); ?></h2>
+							<p><?php _e('Змінюйте налаштування і бачте результат в реальному часі справа.', 'smartlearn-lms'); ?></p>
+							
+							<h3><?php _e('Елементи (Будова картки)', 'smartlearn-lms'); ?></h3>
+							<table class="form-table">
+								<tr>
+									<td colspan="2" style="padding-left:0; padding-top:0;">
+										<?php
+										$default_layout = 'thumbnail:1,category:1,title:1,meta:1,excerpt:1,button:1';
+										$saved_layout = $opts['card_layout'];
+										$layout_items = explode(',', $saved_layout);
+										$labels = array(
+											'thumbnail' => __('Зображення', 'smartlearn-lms'),
+											'category' => __('Категорія', 'smartlearn-lms'),
+											'title' => __('Заголовок', 'smartlearn-lms'),
+											'meta' => __('Мета-дані (рівень, час)', 'smartlearn-lms'),
+											'excerpt' => __('Опис', 'smartlearn-lms'),
+											'button' => __('Кнопка', 'smartlearn-lms'),
+										);
+										
+										foreach($labels as $key => $label) {
+											$found = false;
+											foreach($layout_items as $item) {
+												if (strpos($item, $key.':') === 0) { $found = true; break; }
+											}
+											if (!$found) $layout_items[] = $key.':1';
+										}
+										?>
+										<ul id="sl-card-layout-list">
+											<?php foreach($layout_items as $item): 
+												$parts = explode(':', $item);
+												if (count($parts) !== 2) continue;
+												$id = $parts[0];
+												$visible = $parts[1] === '1';
+												if (!isset($labels[$id])) continue;
+											?>
+											<li data-id="<?php echo esc_attr($id); ?>">
+												<span class="dashicons dashicons-menu"></span>
+												<label>
+													<input type="checkbox" class="sl-layout-cb" <?php checked($visible, true); ?>> 
+													<?php echo esc_html($labels[$id]); ?>
+												</label>
+											</li>
+											<?php endforeach; ?>
+										</ul>
+										<input type="hidden" id="smartlearn_lms_card_layout" name="smartlearn_lms_card_layout" value="<?php echo esc_attr($saved_layout); ?>">
+										<p class="description" style="margin-top:10px;"><?php _e('Перетягніть блоки мишкою ↕, щоб змінити порядок відображення в картці. Зніміть галочку для приховування.', 'smartlearn-lms'); ?></p>
+									</td>
+								</tr>
+								<tr>
+									<th scope="row" style="padding-top:0;"><label for="smartlearn_lms_image_aspect"><?php _e( 'Пропорції зображення', 'smartlearn-lms' ); ?></label></th>
+									<td>
+										<select id="smartlearn_lms_image_aspect" name="smartlearn_lms_image_aspect" class="sl-live-select">
+											<option value="16/9" <?php selected($opts['image_aspect'], '16/9'); ?>><?php _e( '16:9 (Широкий)', 'smartlearn-lms' ); ?></option>
+											<option value="4/3" <?php selected($opts['image_aspect'], '4/3'); ?>><?php _e( '4:3 (Стандарт)', 'smartlearn-lms' ); ?></option>
+											<option value="1/1" <?php selected($opts['image_aspect'], '1/1'); ?>><?php _e( '1:1 (Квадрат)', 'smartlearn-lms' ); ?></option>
+											<option value="auto" <?php selected($opts['image_aspect'], 'auto'); ?>><?php _e( 'Авто (Оригінал)', 'smartlearn-lms' ); ?></option>
+										</select>
+									</td>
+								</tr>
+							</table>
+
+							<h3><?php _e('Картка', 'smartlearn-lms'); ?></h3>
+							<table class="form-table">
+								<tr>
+									<th scope="row"><label for="smartlearn_lms_card_bg"><?php _e( 'Фон картки', 'smartlearn-lms' ); ?></label></th>
+									<td><input type="text" id="smartlearn_lms_card_bg" name="smartlearn_lms_card_bg" value="<?php echo esc_attr($opts['card_bg']); ?>" class="sl-color-picker"></td>
+								</tr>
+								<tr>
+									<th scope="row"><label for="smartlearn_lms_card_radius"><?php _e( 'Закруглення кутів (px)', 'smartlearn-lms' ); ?></label></th>
+									<td><input type="number" id="smartlearn_lms_card_radius" name="smartlearn_lms_card_radius" value="<?php echo esc_attr($opts['card_radius']); ?>" class="small-text sl-live-input"> px</td>
+								</tr>
+								<tr>
+									<th scope="row"><label for="smartlearn_lms_card_border"><?php _e( 'Колір рамки', 'smartlearn-lms' ); ?></label></th>
+									<td><input type="text" id="smartlearn_lms_card_border" name="smartlearn_lms_card_border" value="<?php echo esc_attr($opts['card_border']); ?>" class="sl-color-picker"></td>
+								</tr>
+							</table>
+
+							<h3><?php _e('Текст', 'smartlearn-lms'); ?></h3>
+							<table class="form-table">
+								<tr>
+									<th scope="row"><label for="smartlearn_lms_title_color"><?php _e( 'Колір заголовка', 'smartlearn-lms' ); ?></label></th>
+									<td><input type="text" id="smartlearn_lms_title_color" name="smartlearn_lms_title_color" value="<?php echo esc_attr($opts['title_color']); ?>" class="sl-color-picker"></td>
+								</tr>
+								<tr>
+									<th scope="row"><label for="smartlearn_lms_text_color"><?php _e( 'Колір тексту/опису', 'smartlearn-lms' ); ?></label></th>
+									<td><input type="text" id="smartlearn_lms_text_color" name="smartlearn_lms_text_color" value="<?php echo esc_attr($opts['text_color']); ?>" class="sl-color-picker"></td>
+								</tr>
+								<tr>
+									<th scope="row"><label for="smartlearn_lms_meta_color"><?php _e( 'Колір мета-даних', 'smartlearn-lms' ); ?></label></th>
+									<td><input type="text" id="smartlearn_lms_meta_color" name="smartlearn_lms_meta_color" value="<?php echo esc_attr($opts['meta_color']); ?>" class="sl-color-picker"></td>
+								</tr>
+							</table>
+
+							<h3><?php _e('Кнопка', 'smartlearn-lms'); ?></h3>
+							<table class="form-table">
+								<tr>
+									<th scope="row"><label for="smartlearn_lms_btn_bg"><?php _e( 'Фон кнопки', 'smartlearn-lms' ); ?></label></th>
+									<td><input type="text" id="smartlearn_lms_btn_bg" name="smartlearn_lms_btn_bg" value="<?php echo esc_attr($opts['btn_bg']); ?>" class="sl-color-picker"></td>
+								</tr>
+								<tr>
+									<th scope="row"><label for="smartlearn_lms_btn_hover_bg"><?php _e( 'Фон кнопки (Наведення)', 'smartlearn-lms' ); ?></label></th>
+									<td><input type="text" id="smartlearn_lms_btn_hover_bg" name="smartlearn_lms_btn_hover_bg" value="<?php echo esc_attr($opts['btn_hover_bg']); ?>" class="sl-color-picker"></td>
+								</tr>
+								<tr>
+									<th scope="row"><label for="smartlearn_lms_btn_text_color"><?php _e( 'Колір тексту кнопки', 'smartlearn-lms' ); ?></label></th>
+									<td><input type="text" id="smartlearn_lms_btn_text_color" name="smartlearn_lms_btn_text_color" value="<?php echo esc_attr($opts['btn_text_color']); ?>" class="sl-color-picker"></td>
+								</tr>
+								<tr>
+									<th scope="row"><label for="smartlearn_lms_btn_radius"><?php _e( 'Закруглення кнопки (px)', 'smartlearn-lms' ); ?></label></th>
+									<td><input type="number" id="smartlearn_lms_btn_radius" name="smartlearn_lms_btn_radius" value="<?php echo esc_attr($opts['btn_radius']); ?>" class="small-text sl-live-input"> px</td>
+								</tr>
+							</table>
+						</div>
+
+						<!-- TAB 4: Instructions -->
+						<div id="tab-instructions" class="tab-content smartlearn-lms-card">
+							<h2><?php _e( '📖 Як використовувати', 'smartlearn-lms' ); ?></h2>
+							<div class="smartlearn-instructions">
+								<h3><?php _e( 'Шорткоди', 'smartlearn-lms' ); ?></h3>
+								<h4><?php _e( 'Список всіх курсів:', 'smartlearn-lms' ); ?></h4>
+								<div class="smartlearn-code-block">
+									<code>[courses_list]</code>
+								</div>
+								<h4><?php _e( 'Параметри шорткоду:', 'smartlearn-lms' ); ?></h4>
+								<ul class="smartlearn-params-list">
+									<li><strong>columns</strong> - <?php _e( 'кількість колонок (1-4)', 'smartlearn-lms' ); ?> <code>[courses_list columns="4"]</code></li>
+									<li><strong>category</strong> - <?php _e( 'slug категорії', 'smartlearn-lms' ); ?> <code>[courses_list category="programming"]</code></li>
+								</ul>
+							</div>
+						</div>
+						
+						<p class="submit">
+							<?php submit_button( 'Зберегти зміни', 'primary', 'submit', false ); ?>
 						</p>
+
 					</div>
 					
-					<!-- Stabion Studio -->
-					<div class="smartlearn-lms-card -stabion">
-						<h3><?php _e( 'Про автора', 'smartlearn-lms' ); ?></h3>
-						<p><?php _e( 'Розроблено командою', 'smartlearn-lms' ); ?> <strong>Stabion Studio</strong></p>
-						<p><?php _e( 'Ми створюємо професійні рішення для WordPress та WooCommerce.', 'smartlearn-lms' ); ?></p>
-						
-						<div class="stabion-links">
-							<a href="https://stabion.studio" target="_blank" class="button">
-								<span class="dashicons dashicons-admin-site"></span>
-								<?php _e( 'Наш сайт', 'smartlearn-lms' ); ?>
-							</a>
-							<a href="https://github.com/stabion" target="_blank" class="button">
-								<span class="dashicons dashicons-github"></span>
-								<?php _e( 'GitHub', 'smartlearn-lms' ); ?>
-							</a>
+					<!-- Права колонка (Прев'ю) -->
+					<div class="smartlearn-lms-settings-sidebar">
+						<div class="live-preview-container">
+							<h3 style="margin-top:0"><?php _e('Live Preview', 'smartlearn-lms'); ?></h3>
+							
+							<div id="preview-card">
+								<div class="preview-thumb-wrap" data-id="thumbnail">
+									<div class="preview-thumb"></div>
+								</div>
+								<div class="preview-cat" data-id="category"><span id="preview-meta-cat">Розробка</span></div>
+								<div id="preview-title" data-id="title">WordPress Plugin Development</div>
+								<div id="preview-meta" data-id="meta">
+									<span id="preview-meta-level">Початковий</span>
+									<span id="preview-meta-time">2 години</span>
+								</div>
+								<div id="preview-excerpt" data-id="excerpt">Дізнайтеся як створювати професійні плагіни для WordPress з нуля. В цьому курсі ви пройдете всі етапи...</div>
+								<div id="preview-btn-wrap" data-id="button">
+									<a href="#" id="preview-btn">Переглянути курс</a>
+								</div>
+							</div>
 						</div>
 					</div>
 					
-					<!-- Корисні посилання -->
-					<div class="smartlearn-lms-card">
-						<h3><?php _e( '🔗 Корисні посилання', 'smartlearn-lms' ); ?></h3>
-						<ul class="-links-list">
-							<li>
-								<a href="edit.php?post_type=smartlearn_course">
-									<span class="dashicons dashicons-book"></span>
-									<?php _e( 'Всі курси', 'smartlearn-lms' ); ?>
-								</a>
-							</li>
-							<li>
-								<a href="post-new.php?post_type=smartlearn_course">
-									<span class="dashicons dashicons-plus"></span>
-									<?php _e( 'Додати курс', 'smartlearn-lms' ); ?>
-								</a>
-							</li>
-							<li>
-								<a href="edit.php?post_type=smartlearn_lesson">
-									<span class="dashicons dashicons-media-document"></span>
-									<?php _e( 'Всі уроки', 'smartlearn-lms' ); ?>
-								</a>
-							</li>
-							<li>
-								<a href="edit-tags.php?taxonomy=course_category&post_type=smartlearn_course">
-									<span class="dashicons dashicons-category"></span>
-									<?php _e( 'Категорії курсів', 'smartlearn-lms' ); ?>
-								</a>
-							</li>
-							<li>
-								<a href="edit.php?post_type=product">
-									<span class="dashicons dashicons-products"></span>
-									<?php _e( 'Товари WooCommerce', 'smartlearn-lms' ); ?>
-								</a>
-							</li>
-						</ul>
-					</div>
-					
 				</div>
-				
-			</div>
+			</form>
 		</div>
-		
+
 		<script>
 		jQuery(document).ready(function($) {
-			// Копіювання в буфер обміну
-			$('.copy-shortcode, .copy-crypto').on('click', function(e) {
-				e.preventDefault();
-				var text = $(this).data('clipboard');
-				var $button = $(this);
-				
-				// Створити тимчасове поле
-				var $temp = $('<input>');
-				$('body').append($temp);
-				$temp.val(text).select();
-				document.execCommand('copy');
-				$temp.remove();
-				
-				// Показати повідомлення
-				var originalText = $button.text();
-				$button.text('<?php _e( 'Скопійовано!', 'smartlearn-lms' ); ?>');
-				setTimeout(function() {
-					$button.text(originalText);
-				}, 2000);
+			// Ініціалізація Color Picker
+			$('.sl-color-picker').wpColorPicker({
+				change: updateLivePreview
 			});
+			
+			// Tabs
+			$('.nav-tab').on('click', function(e) {
+				e.preventDefault();
+				$('.nav-tab').removeClass('nav-tab-active');
+				$(this).addClass('nav-tab-active');
+				var target = $(this).attr('href');
+				$('.tab-content').removeClass('active');
+				$(target).addClass('active');
+			});
+
+			// Drag and Drop
+			function syncLayout() {
+				var arr = [];
+				$('#sl-card-layout-list li').each(function() {
+					var id = $(this).data('id');
+					var vis = $(this).find('input').is(':checked') ? '1' : '0';
+					arr.push(id + ':' + vis);
+				});
+				$('#smartlearn_lms_card_layout').val(arr.join(','));
+				updateLivePreview();
+			}
+
+			$('#sl-card-layout-list').sortable({
+				update: syncLayout,
+				handle: '.dashicons-menu',
+				axis: 'y'
+			});
+			$('.sl-layout-cb').on('change', syncLayout);
+
+			// Live Update
+			$('.sl-live-input, .sl-live-select').on('input change', updateLivePreview);
+
+			function updateLivePreview() {
+				// Отримуємо значення
+				var layoutStr = $('#smartlearn_lms_card_layout').val();
+				var aspect = $('#smartlearn_lms_image_aspect').val() || '16/9';
+				var bg = $('#smartlearn_lms_card_bg').val() || '#fff';
+				var radius = $('#smartlearn_lms_card_radius').val() || '8';
+				var border = $('#smartlearn_lms_card_border').val() || '#e0e0e0';
+				var tColor = $('#smartlearn_lms_title_color').val() || '#000';
+				var textColor = $('#smartlearn_lms_text_color').val() || '#333';
+				var mColor = $('#smartlearn_lms_meta_color').val() || '#666';
+				var btnBg = $('#smartlearn_lms_btn_bg').val() || '#0073aa';
+				var btnHbg = $('#smartlearn_lms_btn_hover_bg').val() || '#005177';
+				var btnTxtC = $('#smartlearn_lms_btn_text_color').val() || '#fff';
+				var btnRd = $('#smartlearn_lms_btn_radius').val() || '4';
+				var btnLabel = $('#smartlearn_lms_button_text_view').val() || 'Переглянути курс';
+
+				// Застосовуємо до картки
+				var $card = $('#preview-card');
+				$card.css({
+					'background-color': bg,
+					'border-radius': radius + 'px',
+					'border': '1px solid ' + border
+				});
+
+				// Тексти та кольори
+				$('#preview-title').css('color', tColor);
+				$('#preview-excerpt').css('color', textColor);
+				$('#preview-meta-cat, #preview-meta-level, #preview-meta-time').css('color', mColor);
+				$('#preview-btn').text(btnLabel)
+					.css({
+						'background-color': btnBg,
+						'color': btnTxtC,
+						'border-radius': btnRd + 'px'
+					});
+				// Записуємо CSS змінну для hover
+				$('#preview-btn')[0].style.setProperty('--hover-bg', btnHbg);
+
+				// Layout & Visibility
+				var $card = $('#preview-card');
+				var visibleItems = [];
+				
+				if (layoutStr) {
+					var parts = layoutStr.split(',');
+					for (var i = 0; i < parts.length; i++) {
+						var kv = parts[i].split(':');
+						if (kv.length === 2) {
+							var id = kv[0];
+							var isVisible = kv[1] === '1';
+							var $el = $card.find('[data-id="' + id + '"]');
+							
+							if ($el.length) {
+								if (isVisible) {
+									$el.show();
+									visibleItems.push(id);
+									$card.append($el); // Append simply re-orders DOM elements!
+								} else {
+									$el.hide();
+								}
+							}
+						}
+					}
+				}
+				
+				// Fix thumbnail margin based on position
+				var $thumbWrap = $card.find('.preview-thumb-wrap');
+				if (visibleItems.length > 0) {
+					var tIdx = visibleItems.indexOf('thumbnail');
+					if (tIdx === 0) {
+						$thumbWrap.css('margin', '-20px -20px 10px');
+					} else if (tIdx === visibleItems.length - 1) {
+						$thumbWrap.css('margin', '10px -20px -20px');
+					} else {
+						$thumbWrap.css('margin', '10px -20px');
+					}
+				}
+				
+				// Пропорції зображення
+				var $thumb = $('.preview-thumb');
+				if (aspect === 'auto') {
+					$thumb.css('aspect-ratio', 'auto').css('height', '180px');
+				} else {
+					$thumb.css('aspect-ratio', aspect).css('height', 'auto');
+				}
+			}
+
+			// Ініціалізація
+			updateLivePreview();
 		});
 		</script>
 		<?php

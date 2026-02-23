@@ -3,7 +3,7 @@
 /* Courses Grid (Shortcode) */
 .smartlearn-courses-grid {
   display: grid !important;
-  gap: 30px;
+  gap: var(--wd-sp, 30px);
   margin: 30px 0;
   width: 100%;
   grid-auto-rows: 1fr;
@@ -48,24 +48,36 @@
 }
 
 .smartlearn-course-item {
-  background: #fff;
-  border: 1px solid #e0e0e0;
-  border-radius: 8px;
+  background: var(--bgcolor-white, #fff);
+  border: 1px solid var(--brdcolor-gray-300, #e0e0e0);
+  border-radius: var(--wd-brd-radius, 8px);
   overflow: hidden;
-  transition: box-shadow 0.3s ease;
+  transition: box-shadow 0.3s ease, transform 0.3s ease;
   display: flex !important;
   flex-direction: column;
   width: 100%;
   box-sizing: border-box;
+  position: relative;
+}
+
+/* Ensure grid items stretch to equal height */
+.smartlearn-courses-grid > .smartlearn-course-item {
+  height: 100%;
 }
 
 .smartlearn-course-item:hover {
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 0 9px rgba(0,0,0,0.2);
+  transform: translateY(-3px);
 }
 
 .smartlearn-course-thumbnail {
   position: relative;
   overflow: hidden;
+}
+
+/* Keep thumbnail at top and do not stretch */
+.smartlearn-course-thumbnail {
+  flex: 0 0 auto;
 }
 
 .smartlearn-course-thumbnail img {
@@ -83,13 +95,14 @@
   position: absolute;
   top: 15px;
   right: 15px;
-  background: #46b450;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: #fff;
   padding: 5px 12px;
-  border-radius: 4px;
+  border-radius: 20px;
   font-size: 12px;
   font-weight: 600;
   text-transform: uppercase;
+  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.4);
 }
 
 .smartlearn-course-content {
@@ -97,6 +110,25 @@
   flex: 1;
   display: flex;
   flex-direction: column;
+}
+
+/* Make inner blocks inside content align and stretch consistently */
+.smartlearn-course-content > * {
+  box-sizing: border-box;
+}
+
+.smartlearn-course-excerpt {
+  /* allow excerpt to take available space before button */
+  flex: 1 1 auto;
+  margin-bottom: 15px;
+}
+
+.smartlearn-course-button-wrap {
+  margin-top: auto;
+  padding-top: 15px;
+  width: 100%;
+  position: relative;
+  z-index: 9998;
 }
 
 .smartlearn-course-categories {
@@ -121,12 +153,13 @@
 }
 
 .smartlearn-course-title a {
-  color: #333;
+  color: var(--color-gray-900, #333);
   text-decoration: none;
+  transition: color 0.3s ease;
 }
 
 .smartlearn-course-title a:hover {
-  color: #0073aa;
+  color: var(--wd-primary-color, #667eea);
 }
 
 .smartlearn-course-meta {
@@ -148,42 +181,52 @@
   margin-bottom: 15px;
 }
 
-.smartlearn-course-button-wrap {
-  margin-top: auto;
-  padding-top: 15px;
+/* Clamp excerpt to 2 lines with ellipsis */
+.smartlearn-course-excerpt {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
+
+/* keep wrapper full-width; avoid centering rules that can break click overlays */
 
 .smartlearn-course-button {
   display: inline-block;
-  padding: 10px 20px;
-  background-color: var(--btn-accented-bgcolor, #0073aa);
-  color: var(--btn-accented-color, #fff);
+  padding: 12px 30px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: #fff;
   text-decoration: none;
-  border-radius: var(--btn-accented-brd-radius, 0px);
-  box-shadow: var(--btn-accented-box-shadow, none);
-  text-transform: var(
-    --btn-accented-transform,
-    var(--btn-transform, uppercase)
-  );
-  font-weight: var(--btn-accented-font-weight, var(--btn-font-weight, 600));
-  font-family: var(--btn-accented-font-family, var(--btn-font-family, inherit));
-  font-style: var(--btn-accented-font-style, var(--btn-font-style, unset));
-  width: 100%;
+  border-radius: 25px;
   font-size: 14px;
-  transition: background 0.3s ease;
+  font-weight: var(--btn-accented-font-weight, 600);
+  text-transform: var(--btn-accented-transform, uppercase);
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+  width: 100%;
+  box-sizing: border-box;
+  cursor: pointer;
+  pointer-events: auto;
+  position: relative;
+  z-index: 9999;
 }
 
 .smartlearn-course-button:hover {
-  background: #005a87;
+  background: linear-gradient(135deg, #764ba2 0%, #667eea 100%);
   color: #fff;
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
 }
 
 .smartlearn-course-button.need-login {
-  background: #666;
+  background: var(--color-gray-600, #666);
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
 }
 
 .smartlearn-course-button.need-purchase {
-  background: #46b450;
+  background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+  box-shadow: 0 4px 15px rgba(40, 167, 69, 0.3);
 }
 
 /* Single Course */
@@ -191,62 +234,6 @@
   max-width: 1000px;
   margin: 0 auto;
   padding: 40px 20px;
-}
-
-/* My Account - Courses */
-.woocommerce-account .smartlearn-my-courses-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 18px;
-  margin-top: 16px;
-}
-
-.woocommerce-account .smartlearn-my-course-item {
-  background: var(--bgcolor-white, #fff);
-  border: 1px solid var(--brdcolor-gray-300, #e0e0e0);
-  border-radius: 12px;
-  overflow: hidden;
-}
-
-.woocommerce-account .smartlearn-my-course-thumb img {
-  width: 100%;
-  height: auto;
-  display: block;
-}
-
-.woocommerce-account .smartlearn-my-course-body {
-  padding: 14px 14px 16px;
-}
-
-.woocommerce-account .smartlearn-my-course-title {
-  display: block;
-  font-weight: 700;
-  color: var(--wd-title-color, #111);
-  text-decoration: none;
-  margin-bottom: 6px;
-}
-
-.woocommerce-account .smartlearn-my-course-title:hover {
-  color: var(--wd-primary-color, #667eea);
-}
-
-.woocommerce-account .smartlearn-my-course-meta {
-  font-size: 13px;
-  color: var(--color-gray-600, #777);
-  margin-bottom: 12px;
-}
-
-.woocommerce-account .smartlearn-my-course-button {
-  width: 100%;
-  text-align: center;
-}
-
-@media (max-width: 1024px) {
-  .woocommerce-account .smartlearn-my-courses-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-}
-
-@media (max-width: 520px) {
-  .woocommerce-account .smartlearn-my-courses-grid { grid-template-columns: 1fr; }
 }
 
 .smartlearn-course-header {
@@ -281,19 +268,32 @@
 .smartlearn-course-thumbnail {
   margin-bottom: 30px;
 }
+.smartlearn-course-thumbnail img {
+  width: 100%;
+  height: auto;
+  display: block;
+  object-fit: cover;
+  border-radius: 12px;
+}
 
 .smartlearn-course-description {
   line-height: 1.8;
   margin-bottom: 40px;
 }
 
+.smartlearn-course-lessons-count {
+  margin-top: 14px;
+  font-size: 13px;
+  color: var(--color-gray-600, #777);
+}
+
 .smartlearn-course-lessons-section h2 {
   font-size: 24px;
-  margin-bottom: 18px;
-  color: var(--wd-title-color, #111);
+  margin-bottom: 30px;
+  color: var(--wd-title-color, #333);
   font-weight: var(--wd-title-font-weight, 600);
   position: relative;
-  padding-bottom: 12px;
+  padding-bottom: 15px;
 }
 
 .smartlearn-course-lessons-section h2:after {
@@ -301,111 +301,123 @@
   position: absolute;
   bottom: 0;
   left: 0;
-  width: 64px;
-  height: 2px;
-  background: var(--wd-primary-color, #667eea);
-  border-radius: 2px;
-  opacity: 0.9;
+  width: 60px;
+  height: 3px;
+  background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+  border-radius: 3px;
 }
 
 /* Lessons List */
 .smartlearn-lessons-list {
-  background: var(--bgcolor-white, #fff);
-  border: 1px solid var(--brdcolor-gray-300, #e6e6e6);
-  border-radius: var(--wd-brd-radius, 12px);
-  overflow: hidden;
-  box-shadow: 0 1px 8px rgba(0, 0, 0, 0.04);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  overflow: visible;
+  box-shadow: none;
 }
 
-.smartlearn-lessons-list > .smartlearn-lesson-item,
-.smartlearn-lessons-list > .-lesson-item {
+.smartlearn-lesson-item {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 14px;
-  padding: 14px 18px;
-  border-bottom: 1px solid var(--brdcolor-gray-200, #f0f0f0);
+  padding: 14px 16px;
   background: var(--bgcolor-white, #fff);
-  transition: background 0.2s ease, padding-left 0.2s ease, box-shadow 0.2s ease;
-  box-shadow: inset 2px 0 0 transparent;
+  border: 1px solid var(--brdcolor-gray-200, #eee);
+  border-radius: 12px;
+  transition: background 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.04);
 }
 
-.smartlearn-lessons-list > .smartlearn-lesson-item:last-child,
-.smartlearn-lessons-list > .-lesson-item:last-child {
-  border-bottom: none;
+.smartlearn-lesson-item.has-access {
+  border-left: 3px solid var(--wd-primary-color, #667eea);
 }
 
-.smartlearn-lessons-list > .smartlearn-lesson-item:hover,
-.smartlearn-lessons-list > .-lesson-item:hover {
+.smartlearn-lesson-item.no-access {
+  opacity: 0.7;
+}
+
+.smartlearn-lesson-item:hover {
   background: var(--bgcolor-gray-100, #f7f7f7);
-  padding-left: 22px;
-  box-shadow: inset 2px 0 0 var(--wd-primary-color, #667eea);
+  border-color: color-mix(in srgb, var(--wd-primary-color, #667eea) 22%, var(--brdcolor-gray-200, #eee));
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.06);
 }
 
-.smartlearn-lessons-list > .smartlearn-lesson-item.has-access,
-.smartlearn-lessons-list > .-lesson-item.has-access {
-  box-shadow: inset 2px 0 0 var(--wd-primary-color, #667eea);
+.smartlearn-lesson-item:before {
+  content: none;
 }
 
-.smartlearn-lessons-list > .smartlearn-lesson-item.no-access,
-.smartlearn-lessons-list > .-lesson-item.no-access {
-  opacity: 0.55;
-}
-
-.smartlearn-lesson-icon {
-  display: none;
-}
-
+.smartlearn-lesson-icon,
 .smartlearn-lesson-number {
   display: none;
 }
 
-.smartlearn-lesson-title {
+.smartlearn-lesson-content {
+  min-width: 0;
   flex: 1;
-  font-weight: 500;
-  font-size: 16px;
-  line-height: 1.35;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.smartlearn-lesson-title {
+  display: block;
+  font-weight: 600;
+  font-size: 18px;
+  line-height: 1.25;
   color: var(--color-gray-900, #111);
   text-decoration: none;
   margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-a.smartlearn-lesson-title:hover {
+.smartlearn-lesson-title:hover {
   color: var(--wd-primary-color, #667eea);
   text-decoration: none;
+}
+
+.smartlearn-lesson-title.smartlearn-lesson-locked {
+  color: var(--color-gray-500, #9aa0a6);
 }
 
 .smartlearn-lesson-meta {
   display: flex;
   gap: 10px;
   align-items: center;
-  font-size: 13px;
-  color: var(--color-gray-600, #777);
-}
-
-.smartlearn-lesson-meta:empty {
-  display: none;
+  justify-content: flex-end;
+  flex-shrink: 0;
 }
 
 .smartlearn-lesson-badge {
-  padding: 3px 10px;
-  background: var(--bgcolor-gray-100, #f3f4f6);
-  color: var(--color-gray-800, #444);
-  border-radius: 999px;
+  padding: 4px 12px;
+  background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+  color: #fff;
+  border-radius: 15px;
   font-size: 11px;
   font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.02em;
+  box-shadow: 0 2px 8px rgba(40, 167, 69, 0.3);
 }
 
 .smartlearn-lesson-duration {
   font-size: 13px;
   color: var(--color-gray-600, #777);
+  background: var(--bgcolor-gray-100, #f3f4f6);
+  border: 1px solid var(--brdcolor-gray-200, #eee);
+  padding: 4px 10px;
+  border-radius: 999px;
 }
 
 /* Single Lesson */
 .smartlearn-lesson-single {
   max-width: 1000px;
   margin: 0 auto;
+  width: 100%;
   padding: 40px 20px;
 }
 
@@ -473,7 +485,7 @@ a.smartlearn-lesson-title:hover {
 .smartlearn-lesson-navigation .button {
   padding: 10px 20px;
   /* Background color controlled by CSS variable --smartlearn-lesson-nav-btn-bg */
-  background: var(--smartlearn-lesson-nav-btn-bg, #0073aa);
+  background: var(--smartlearn-lesson-nav-btn-bg, #b8b7fd);
   color: var(--smartlearn-lesson-nav-btn-color, #fff);
   text-decoration: none;
   border-radius: 4px;
@@ -483,7 +495,7 @@ a.smartlearn-lesson-title:hover {
 }
 
 .smartlearn-lesson-navigation .button:hover {
-  background: var(--smartlearn-lesson-nav-btn-bg-hover, #005a87);
+  background: var(--smartlearn-lesson-nav-btn-bg-hover, #b8b7fd);
   color: var(--smartlearn-lesson-nav-btn-color-hover, #fff);
 }
 
@@ -492,39 +504,45 @@ a.smartlearn-lesson-title:hover {
 .smartlearn-course-locked,
 .smartlearn-lesson-locked {
   text-align: center;
-  padding: 60px 20px;
-  background: #f9f9f9;
-  border: 1px solid #e0e0e0;
-  border-radius: 8px;
-  margin: 40px 0;
+  padding: 22px 18px;
+  background: var(--bgcolor-white, #fff);
+  color: var(--wd-text-color, #333);
+  border: 1px solid var(--brdcolor-gray-200, rgba(0, 0, 0, 0.12));
+  border-radius: 10px;
+  margin: 18px 0;
+  box-shadow: none;
 }
 
 .smartlearn-access-denied-icon {
-  font-size: 48px;
-  margin-bottom: 20px;
+  display: none;
 }
 
 .smartlearn-access-denied h3 {
-  font-size: 20px;
-  margin-bottom: 20px;
-  color: #333;
+  font-size: 16px;
+  line-height: 1.4;
+  margin: 0 0 12px;
+  color: inherit;
+  font-weight: 600;
 }
 
 .smartlearn-access-button {
   display: inline-block;
-  padding: 12px 30px;
-  background: #46b450;
-  color: #fff;
+  padding: 10px 18px;
+  background: var(--btn-accented-bgcolor, var(--wd-primary-color, #b8b7fd));
+  color: var(--smartlearn-lesson-nav-btn-color, #fff);
   text-decoration: none;
-  border-radius: 4px;
-  font-size: 16px;
+  border-radius: 8px;
+  font-size: 14px;
   font-weight: 600;
-  transition: background 0.3s ease;
+  transition: all 0.3s ease;
+  margin: 0;
+  box-shadow: none;
 }
 
 .smartlearn-access-button:hover {
-  background: #399945;
-  color: #fff;
+  background: var(--smartlearn-lesson-nav-btn-bg-hover, var(--wd-primary-color, #b8b7fd));
+  color: var(--smartlearn-lesson-nav-btn-color-hover, #fff);
+  transform: none;
 }
 
 /* Responsive */

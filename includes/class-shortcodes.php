@@ -13,9 +13,60 @@ class SmartLearn_LMS_Shortcodes {
 		add_shortcode( 'courses_list', array( $this, 'courses_list' ) );
 		add_shortcode( 'course_lessons', array( $this, 'course_lessons' ) );
 		add_action( 'wp_enqueue_scripts', array( $this, 'enqueue_styles' ) );
-		// Admin settings for styling
-		add_action( 'admin_menu', array( $this, 'add_settings_page' ) );
-		add_action( 'admin_init', array( $this, 'register_settings' ) );
+	}
+
+	/**
+	 * Get login / my-account URL.
+	 */
+	private function get_login_url( $redirect_url = '' ) {
+		$login_url = trim( (string) get_option( 'smartlearn_lms_login_url', '' ) );
+		if ( empty( $login_url ) && function_exists( 'wc_get_page_permalink' ) ) {
+			$login_url = wc_get_page_permalink( 'myaccount' );
+		}
+		if ( empty( $login_url ) ) {
+			$login_url = wp_login_url( $redirect_url ?: home_url( '/' ) );
+		}
+		return $login_url;
+	}
+
+	/**
+	 * Get WooCommerce product permalink linked to the course.
+	 */
+	private function get_course_purchase_url( $course_id ) {
+		$product_id = get_post_meta( $course_id, '_smartlearn_course_product_id', true );
+		$product_id = $product_id ? absint( $product_id ) : 0;
+		if ( ! $product_id || ! function_exists( 'wc_get_product' ) ) {
+			return '';
+		}
+		$product = wc_get_product( $product_id );
+		if ( ! $product ) {
+			return '';
+		}
+		return $product->get_permalink();
+	}
+
+	/**
+	 * Get a reliable course URL.
+	 */
+	private function get_course_preview_url( $course_id ) {
+		$course_id = absint( $course_id );
+		if ( ! $course_id ) {
+			return home_url( '/' );
+		}
+
+		$url = get_permalink( $course_id );
+		$home = home_url( '/' );
+		if ( empty( $url ) || untrailingslashit( $url ) === untrailingslashit( $home ) ) {
+			$url = add_query_arg(
+				array(
+					'post_type' => 'smartlearn_course',
+					'p' => $course_id,
+				),
+				home_url( '/' )
+			);
+		}
+
+		return $url;
 	}
 	
 	/**
@@ -26,153 +77,84 @@ class SmartLearn_LMS_Shortcodes {
 			'smartlearn-lms-frontend',
 			SMARTLEARN_LMS_URL . 'assets/css/frontend.css',
 			array(),
-			SMARTLEARN_LMS_VERSION . '-' . time() // Додаємо timestamp щоб оминути кеш
+			SMARTLEARN_LMS_VERSION . '-' . time() // Оминаємо кеш
 		);
 		
-		// Додаємо inline критичні стилі для гарантії
-		$inline_css = '
+		$opts = array(
+			'image_aspect' => get_option('smartlearn_lms_image_aspect', '16/9'),
+			'card_bg' => get_option('smartlearn_lms_card_bg', '#ffffff'),
+			'card_radius' => get_option('smartlearn_lms_card_radius', '8'),
+			'card_border' => get_option('smartlearn_lms_card_border', '#e0e0e0'),
+			'title_color' => get_option('smartlearn_lms_title_color', '#1d2327'),
+			'text_color' => get_option('smartlearn_lms_text_color', '#3c434a'),
+			'meta_color' => get_option('smartlearn_lms_meta_color', '#646970'),
+			'btn_bg' => get_option('smartlearn_lms_btn_bg', '#2271b1'),
+			'btn_txt_color' => get_option('smartlearn_lms_btn_text_color', '#ffffff'),
+			'btn_hover_bg' => get_option('smartlearn_lms_btn_hover_bg', '#135e96'),
+			'btn_radius' => get_option('smartlearn_lms_btn_radius', '4'),
+		);
+
+		$inline_css = "
 			.smartlearn-courses-grid { 
 				display: grid !important; 
 				gap: 30px !important; 
 				margin: 30px 0 !important; 
 				width: 100% !important;
 			}
-			.smartlearn-courses-grid.columns-1 { grid-template-columns: 1fr !important; }
-			.smartlearn-courses-grid.columns-2 { grid-template-columns: repeat(2, 1fr) !important; }
-			.smartlearn-courses-grid.columns-3 { grid-template-columns: repeat(3, 1fr) !important; }
-			.smartlearn-courses-grid.columns-4 { grid-template-columns: repeat(4, 1fr) !important; }
+			@media(min-width: 992px) {
+				.smartlearn-courses-grid.columns-1 { grid-template-columns: 1fr !important; }
+				.smartlearn-courses-grid.columns-2 { grid-template-columns: repeat(2, 1fr) !important; }
+				.smartlearn-courses-grid.columns-3 { grid-template-columns: repeat(3, 1fr) !important; }
+				.smartlearn-courses-grid.columns-4 { grid-template-columns: repeat(4, 1fr) !important; }
+			}
+			@media(min-width: 768px) and (max-width: 991px) {
+				.smartlearn-courses-grid.columns-3, .smartlearn-courses-grid.columns-4 { grid-template-columns: repeat(2, 1fr) !important; }
+			}
+			@media(max-width: 767px) {
+				.smartlearn-courses-grid { grid-template-columns: 1fr !important; }
+			}
 			.smartlearn-course-item { 
 				display: flex !important; 
 				flex-direction: column !important; 
-				background: #fff; 
-				border: 1px solid #e0e0e0; 
-				border-radius: 8px; 
+				background: {$opts['card_bg']} !important; 
+				border: 1px solid {$opts['card_border']} !important; 
+				border-radius: {$opts['card_radius']}px !important; 
 				overflow: hidden;
+				padding: 20px;
+				gap: 10px;
 			}
-		';
+			.smartlearn-course-item > * { width: 100%; margin: 0; }
+			.smartlearn-course-thumbnail { margin: -20px -20px 0 !important; width: calc(100% + 40px) !important; }
+			.smartlearn-course-thumbnail img {
+				width: 100%;
+				display: block;
+				object-fit: cover;
+				aspect-ratio: " . ($opts['image_aspect'] === 'auto' ? 'auto' : $opts['image_aspect']) . ";
+			}
+			.smartlearn-course-title a { color: {$opts['title_color']} !important; text-decoration: none; }
+			.smartlearn-course-excerpt { color: {$opts['text_color']} !important; }
+			.smartlearn-course-categories a, .smartlearn-course-meta span { color: {$opts['meta_color']} !important; }
+			.smartlearn-course-button {
+				background-color: {$opts['btn_bg']} !important;
+				color: {$opts['btn_txt_color']} !important;
+				border-radius: {$opts['btn_radius']}px !important;
+				text-decoration: none;
+				padding: 10px 20px;
+				display: inline-block;
+				text-align: center;
+				transition: background 0.3s ease;
+			}
+			.smartlearn-course-button:hover { background-color: {$opts['btn_hover_bg']} !important; }
+			/* For elements that are supposed to stick to the bottom */
+			.smartlearn-course-button-wrap { margin-top: auto !important; }
+		";
 		wp_add_inline_style( 'smartlearn-lms-frontend', $inline_css );
-
-		// Inject CSS variables from options (allow admin to control button background)
-		$btn_bg = get_option( 'smartlearn_lms_button_bg', '#B8B7FD' );
-		$btn_text = get_option( 'smartlearn_lms_button_text_color', '#ffffff' );
-		$btn_hover = get_option( 'smartlearn_lms_button_hover_bg', '' );
-		$btn_font = get_option( 'smartlearn_lms_button_font_family', '' );
-		$btn_size = get_option( 'smartlearn_lms_button_font_size', '' );
-		$css_vars = "
-.smartlearn-courses-grid, .smartlearn-course-single, .smartlearn-lesson-navigation, .smartlearn-access-denied, .smartlearn-course-locked {\n"
-			. "  --btn-accented-bgcolor: {$btn_bg};\n"
-			. "  --btn-accented-color: {$btn_text};\n";
-		if ( $btn_hover ) {
-			$css_vars .= "  --btn-accented-bg-hover: " . esc_attr( $btn_hover ) . ";\n";
-		}
-		if ( $btn_font ) {
-			$css_vars .= "  --btn-accented-font-family: " . esc_attr( $btn_font ) . ";\n";
-		}
-		if ( $btn_size ) {
-			$css_vars .= "  --btn-accented-font-size: " . esc_attr( intval( $btn_size ) ) . "px;\n";
-		}
-		$css_vars .= "}\n";
-
-		wp_add_inline_style( 'smartlearn-lms-frontend', $css_vars );
 	}
 
-	/**
-	 * Register admin settings
-	 */
-	public function register_settings() {
-		register_setting( 'smartlearn_lms_styles', 'smartlearn_lms_button_bg', 'sanitize_hex_color' );
-		register_setting( 'smartlearn_lms_styles', 'smartlearn_lms_button_text_color', 'sanitize_hex_color' );
-		register_setting( 'smartlearn_lms_styles', 'smartlearn_lms_button_hover_bg', 'sanitize_hex_color' );
-		register_setting( 'smartlearn_lms_styles', 'smartlearn_lms_button_font_family', 'sanitize_text_field' );
-		register_setting( 'smartlearn_lms_styles', 'smartlearn_lms_button_font_size', 'absint' );
-	}
-
-	/**
-	 * Add settings page under Settings
-	 */
-	public function add_settings_page() {
-		add_options_page(
-			__( 'SmartLearn Styles', 'smartlearn-lms' ),
-			__( 'SmartLearn Styles', 'smartlearn-lms' ),
-			'manage_options',
-			'smartlearn-lms-styles',
-			array( $this, 'settings_page' ),
-		);
-	}
-
-	/**
-	 * Render settings page
-	 */
-	public function settings_page() {
-		if ( ! current_user_can( 'manage_options' ) ) {
-			return;
-		}
-
-		$btn_bg = get_option( 'smartlearn_lms_button_bg', '#B8B7FD' );
-		?>
-		<div class="wrap">
-			<h1><?php _e( 'SmartLearn Styles', 'smartlearn-lms' ); ?></h1>
-			<form method="post" action="options.php">
-				<?php settings_fields( 'smartlearn_lms_styles' ); ?>
-				<?php do_settings_sections( 'smartlearn_lms_styles' ); ?>
-				<table class="form-table">
-					<tr>
-						<th scope="row"><label for="smartlearn_lms_button_bg"><?php _e( 'Button background', 'smartlearn-lms' ); ?></label></th>
-						<td>
-							<input type="text" id="smartlearn_lms_button_bg" name="smartlearn_lms_button_bg" value="<?php echo esc_attr( $btn_bg ); ?>" class="regular-text" />
-							<input type="color" id="smartlearn_lms_button_bg_color" value="<?php echo esc_attr( $btn_bg ); ?>" style="margin-left:8px;vertical-align:middle;" onchange="document.getElementById('smartlearn_lms_button_bg').value = this.value;" />
-							<p class="description"><?php _e( 'Set the background color used for plugin buttons.', 'smartlearn-lms' ); ?></p>
-						</td>
-					</tr>
-					<tr>
-						<th scope="row"><label for="smartlearn_lms_button_hover_bg"><?php _e( 'Button hover background', 'smartlearn-lms' ); ?></label></th>
-						<td>
-							<?php $hover = get_option( 'smartlearn_lms_button_hover_bg', '' ); ?>
-							<input type="text" id="smartlearn_lms_button_hover_bg" name="smartlearn_lms_button_hover_bg" value="<?php echo esc_attr( $hover ); ?>" class="regular-text" />
-							<input type="color" id="smartlearn_lms_button_hover_bg_color" value="<?php echo esc_attr( $hover ?: '#000000' ); ?>" style="margin-left:8px;vertical-align:middle;" onchange="document.getElementById('smartlearn_lms_button_hover_bg').value = this.value;" />
-							<p class="description"><?php _e( 'Optional hover color for plugin buttons.', 'smartlearn-lms' ); ?></p>
-						</td>
-					</tr>
-					<tr>
-						<th scope="row"><label for="smartlearn_lms_button_text_color"><?php _e( 'Button text color', 'smartlearn-lms' ); ?></label></th>
-						<td>
-							<?php $txt = get_option( 'smartlearn_lms_button_text_color', '#ffffff' ); ?>
-							<input type="text" id="smartlearn_lms_button_text_color" name="smartlearn_lms_button_text_color" value="<?php echo esc_attr( $txt ); ?>" class="regular-text" />
-							<input type="color" id="smartlearn_lms_button_text_color_color" value="<?php echo esc_attr( $txt ); ?>" style="margin-left:8px;vertical-align:middle;" onchange="document.getElementById('smartlearn_lms_button_text_color').value = this.value;" />
-							<p class="description"><?php _e( 'Set the text color used inside plugin buttons.', 'smartlearn-lms' ); ?></p>
-						</td>
-					</tr>
-					<tr>
-						<th scope="row"><label for="smartlearn_lms_button_font_family"><?php _e( 'Button font family', 'smartlearn-lms' ); ?></label></th>
-						<td>
-							<?php $font = get_option( 'smartlearn_lms_button_font_family', '' ); ?>
-							<input type="text" id="smartlearn_lms_button_font_family" name="smartlearn_lms_button_font_family" value="<?php echo esc_attr( $font ); ?>" class="regular-text" placeholder="e.g. 'Inter, Arial, sans-serif'" />
-							<p class="description"><?php _e( 'Font family for plugin buttons. Provide CSS font-family string.', 'smartlearn-lms' ); ?></p>
-						</td>
-					</tr>
-					<tr>
-						<th scope="row"><label for="smartlearn_lms_button_font_size"><?php _e( 'Button font size (px)', 'smartlearn-lms' ); ?></label></th>
-						<td>
-							<?php $size = get_option( 'smartlearn_lms_button_font_size', 14 ); ?>
-							<input type="number" id="smartlearn_lms_button_font_size" name="smartlearn_lms_button_font_size" value="<?php echo esc_attr( $size ); ?>" class="small-text" min="8" max="72" /> px
-							<p class="description"><?php _e( 'Font size for plugin buttons in pixels.', 'smartlearn-lms' ); ?></p>
-						</td>
-					</tr>
-				</table>
-				<?php submit_button(); ?>
-			</form>
-		</div>
-		<?php
-	}
-	
 	/**
 	 * Шорткод [courses_list] - список всіх курсів
-	 *
-	 * @param array $atts
-	 * @return string
 	 */
 	public function courses_list( $atts ) {
-		// Отримуємо налаштування за замовчуванням
 		$default_columns = get_option( 'smartlearn_lms_default_columns', '3' );
 		$default_per_page = get_option( 'smartlearn_lms_courses_per_page', '-1' );
 		
@@ -191,7 +173,6 @@ class SmartLearn_LMS_Shortcodes {
 			'order' => $atts['order'],
 		);
 		
-		// Фільтр по категорії
 		if ( ! empty( $atts['category'] ) ) {
 			$args['tax_query'] = array(
 				array(
@@ -211,6 +192,16 @@ class SmartLearn_LMS_Shortcodes {
 		$columns = intval( $atts['columns'] );
 		$columns_class = 'columns-' . $columns;
 		
+		$layout_str = get_option('smartlearn_lms_card_layout', 'thumbnail:1,category:1,title:1,meta:1,excerpt:1,button:1');
+		$layout_items = explode(',', $layout_str);
+		$ordered_blocks = array();
+		foreach($layout_items as $item) {
+			$p = explode(':', $item);
+			if(count($p) == 2 && $p[1] === '1') {
+				$ordered_blocks[] = $p[0];
+			}
+		}
+
 		ob_start();
 		
 		echo '<div class="smartlearn-courses-grid ' . esc_attr( $columns_class ) . '">';
@@ -219,6 +210,7 @@ class SmartLearn_LMS_Shortcodes {
 			$courses->the_post();
 			$course_id = get_the_ID();
 			$user_id = get_current_user_id();
+			$course_url = $this->get_course_preview_url( $course_id );
 			
 			$has_access = SmartLearn_LMS_Access_Control::user_has_course_access( $course_id, $user_id );
 			$is_free = get_post_meta( $course_id, '_smartlearn_course_is_free', true ) === '1';
@@ -226,91 +218,100 @@ class SmartLearn_LMS_Shortcodes {
 			$level = get_post_meta( $course_id, '_smartlearn_course_level', true );
 			
 			$classes = array( 'smartlearn-course-item' );
-			if ( $has_access ) {
-				$classes[] = 'has-access';
-			}
-			if ( $is_free ) {
-				$classes[] = 'is-free';
-			}
+			if ( $has_access ) $classes[] = 'has-access';
+			if ( $is_free ) $classes[] = 'is-free';
 			
 			echo '<div class="' . esc_attr( implode( ' ', $classes ) ) . '">';
 			
-			// Зображення
-			if ( has_post_thumbnail() ) {
-				echo '<div class="smartlearn-course-thumbnail">';
-				echo '<a href="' . esc_url( get_permalink() ) . '">';
-				the_post_thumbnail( 'medium' );
-				echo '</a>';
-				
-				// Мітка безкоштовного курсу
-				if ( $is_free ) {
-					echo '<span class="smartlearn-course-badge free">' . __( 'Безкоштовно', 'smartlearn-lms' ) . '</span>';
+			$block_count = count($ordered_blocks);
+			foreach($ordered_blocks as $idx => $block_id) {
+				switch($block_id) {
+					case 'thumbnail':
+						if ( has_post_thumbnail() ) {
+							$thumb_margin = '0 -20px';
+							if ($idx === 0) $thumb_margin = '-20px -20px 10px';
+							elseif ($idx === $block_count - 1) $thumb_margin = '10px -20px -20px';
+							
+							echo '<div class="smartlearn-course-thumbnail" style="margin: ' . $thumb_margin . '; width: calc(100% + 40px); order: ' . esc_attr($idx) . ';">';
+							echo '<a href="' . esc_url( $course_url ) . '" data-smartlearn-course-id="' . esc_attr( $course_id ) . '" onclick="event.stopPropagation();">';
+							the_post_thumbnail( 'medium' );
+							echo '</a>';
+							if ( $is_free ) {
+								echo '<span class="smartlearn-course-badge free" style="position:absolute; top:10px; right:10px; background:#4CAF50; color:#fff; padding:4px 8px; border-radius:4px; font-size:12px;">' . __( 'Безкоштовно', 'smartlearn-lms' ) . '</span>';
+							}
+							echo '</div>';
+						}
+						break;
+						
+					case 'category':
+						$categories = get_the_terms( $course_id, 'course_category' );
+						if ( $categories && ! is_wp_error( $categories ) ) {
+							echo '<div class="smartlearn-course-categories" style="font-size: 13px; order: ' . esc_attr($idx) . ';">';
+							$cat_links = array();
+							foreach ( $categories as $category ) {
+								$cat_links[] = '<a href="' . esc_url( get_term_link( $category ) ) . '">' . esc_html( $category->name ) . '</a>';
+							}
+							echo implode( ', ', $cat_links );
+							echo '</div>';
+						}
+						break;
+						
+					case 'title':
+						echo '<h4 class="smartlearn-course-title" style="margin: 0 0 5px; order: ' . esc_attr($idx) . ';">';
+						echo '<a href="' . esc_url( $course_url ) . '" data-smartlearn-course-id="' . esc_attr( $course_id ) . '" onclick="event.stopPropagation();">' . get_the_title() . '</a>';
+						echo '</h4>';
+						break;
+						
+					case 'meta':
+						if ( $level || $duration ) {
+							echo '<div class="smartlearn-course-meta" style="font-size: 13px; display: flex; gap: 15px; order: ' . esc_attr($idx) . ';">';
+							if ( $level ) {
+								$level_labels = array('beginner' => __('Початковий', 'smartlearn-lms'), 'intermediate' => __('Середній', 'smartlearn-lms'), 'advanced' => __('Просунутий', 'smartlearn-lms'));
+								echo '<span class="meta-level">' . esc_html( isset($level_labels[$level]) ? $level_labels[$level] : $level ) . '</span>';
+							}
+							if ( $duration ) echo '<span class="meta-duration">' . esc_html( $duration ) . '</span>';
+							echo '</div>';
+						}
+						break;
+						
+					case 'excerpt':
+						$excerpt_text = wp_trim_words( empty( get_the_excerpt() ) ? wp_strip_all_tags( get_the_content() ) : get_the_excerpt(), 20, '...' );
+						echo '<div class="smartlearn-course-excerpt" style="line-height: 1.5; font-size: 14px; order: ' . esc_attr($idx) . ';">' . esc_html( $excerpt_text ) . '</div>';
+						break;
+						
+					case 'button':
+						echo '<div class="smartlearn-course-button-wrap" style="margin-top:auto; order: ' . esc_attr($idx) . ';">';
+						$view_label = get_option( 'smartlearn_lms_button_text_view', __( 'Переглянути', 'smartlearn-lms' ) );
+						$buy_label = get_option( 'smartlearn_lms_button_text_buy', __( 'Купити курс', 'smartlearn-lms' ) );
+						$login_label = get_option( 'smartlearn_lms_button_text_login', __( 'Увійти', 'smartlearn-lms' ) );
+						$btn_class_base = 'smartlearn-course-button';
+
+						if ( ! is_user_logged_in() ) {
+							$target_url = $course_url;
+							$btn_label = $view_label;
+							$btn_class = $btn_class_base . ' view-course';
+						} elseif ( $has_access ) {
+							$target_url = $course_url;
+							$btn_label = $view_label;
+							$btn_class = $btn_class_base . ' has-access';
+						} else {
+							$purchase_url = $this->get_course_purchase_url( $course_id );
+							$target_url = $purchase_url ? $purchase_url : $course_url;
+							$btn_label = $purchase_url ? $buy_label : $view_label;
+							$btn_class = $btn_class_base . ( $purchase_url ? ' need-purchase' : '' );
+						}
+
+						echo sprintf(
+							'<a href="%s" class="%s" data-smartlearn-course-id="%s" onclick="event.stopPropagation();">%s</a>',
+							esc_url( $target_url ),
+							esc_attr( $btn_class ),
+							esc_attr( $course_id ),
+							esc_html( $btn_label )
+						);
+						echo '</div>';
+						break;
 				}
-				
-				echo '</div>';
 			}
-			
-			echo '<div class="smartlearn-course-content">';
-			
-			// Категорії
-			$categories = get_the_terms( $course_id, 'course_category' );
-			if ( $categories && ! is_wp_error( $categories ) ) {
-				echo '<div class="smartlearn-course-categories">';
-				$cat_links = array();
-				foreach ( $categories as $category ) {
-					$cat_links[] = '<a href="' . esc_url( get_term_link( $category ) ) . '">' . esc_html( $category->name ) . '</a>';
-				}
-				echo implode( ', ', $cat_links );
-				echo '</div>';
-			}
-			
-			// Назва
-			echo '<h3 class="smartlearn-course-title">';
-			echo '<a href="' . esc_url( get_permalink() ) . '">' . get_the_title() . '</a>';
-			echo '</h3>';
-			
-			// Мета-інформація
-			if ( $level || $duration ) {
-				echo '<div class="smartlearn-course-meta">';
-				
-				if ( $level ) {
-					$level_labels = array(
-						'beginner' => __( 'Початковий', 'smartlearn-lms' ),
-						'intermediate' => __( 'Середній', 'smartlearn-lms' ),
-						'advanced' => __( 'Просунутий', 'smartlearn-lms' ),
-					);
-					$level_label = isset( $level_labels[ $level ] ) ? $level_labels[ $level ] : $level;
-					echo '<span class="meta-level">' . esc_html( $level_label ) . '</span>';
-				}
-				
-				if ( $duration ) {
-					echo '<span class="meta-duration">' . esc_html( $duration ) . '</span>';
-				}
-				
-				echo '</div>';
-			}
-			
-			// Опис
-			if ( has_excerpt() ) {
-				echo '<div class="smartlearn-course-excerpt">';
-				the_excerpt();
-				echo '</div>';
-			}
-			
-			// Клас обгортки та стандартна кнопка (повернення до оригінальної розмітки)
-			$wrapper_classes = 'smartlearn-course-button-wrap';
-			echo '<div class="' . esc_attr( $wrapper_classes ) . '">';
-			$view_label = get_option( 'smartlearn_lms_button_text_view', __( 'Переглянути', 'smartlearn-lms' ) );
-			$btn_class = 'button smartlearn-course-button login-button';
-			echo sprintf(
-				'<a href="%s" class="%s"><span class="smartlearn-button-label">%s</span></a>',
-				esc_url( get_permalink( $course_id ) ),
-				esc_attr( $btn_class ),
-				esc_html( $view_label )
-			);
-			echo '</div>'; 
-			
-			echo '</div>'; // .smartlearn-course-content
 			
 			echo '</div>'; // .smartlearn-course-item
 		}
@@ -321,12 +322,9 @@ class SmartLearn_LMS_Shortcodes {
 		
 		return ob_get_clean();
 	}
-	
+
 	/**
 	 * Шорткод [course_lessons] - список уроків поточного курсу
-	 *
-	 * @param array $atts
-	 * @return string
 	 */
 	public function course_lessons( $atts ) {
 		$atts = shortcode_atts( array(
