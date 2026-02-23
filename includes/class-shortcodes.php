@@ -232,7 +232,7 @@ class SmartLearn_LMS_Shortcodes {
 							if ($idx === 0) $thumb_margin = '-20px -20px 10px';
 							elseif ($idx === $block_count - 1) $thumb_margin = '10px -20px -20px';
 							
-							echo '<div class="smartlearn-course-thumbnail" style="margin: ' . $thumb_margin . '; width: calc(100% + 40px); order: ' . esc_attr($idx) . ';">';
+							echo '<div class="smartlearn-course-thumbnail" style="margin: ' . $thumb_margin . '; width: calc(100% + 40px);">';
 							echo '<a href="' . esc_url( $course_url ) . '" data-smartlearn-course-id="' . esc_attr( $course_id ) . '" onclick="event.stopPropagation();">';
 							the_post_thumbnail( 'medium' );
 							echo '</a>';
@@ -246,7 +246,7 @@ class SmartLearn_LMS_Shortcodes {
 					case 'category':
 						$categories = get_the_terms( $course_id, 'course_category' );
 						if ( $categories && ! is_wp_error( $categories ) ) {
-							echo '<div class="smartlearn-course-categories" style="font-size: 13px; order: ' . esc_attr($idx) . ';">';
+							echo '<div class="smartlearn-course-categories" style="font-size: 13px;">';
 							$cat_links = array();
 							foreach ( $categories as $category ) {
 								$cat_links[] = '<a href="' . esc_url( get_term_link( $category ) ) . '">' . esc_html( $category->name ) . '</a>';
@@ -257,14 +257,14 @@ class SmartLearn_LMS_Shortcodes {
 						break;
 						
 					case 'title':
-						echo '<h4 class="smartlearn-course-title" style="margin: 0 0 5px; order: ' . esc_attr($idx) . ';">';
+						echo '<h4 class="smartlearn-course-title" style="margin: 0 0 5px;">';
 						echo '<a href="' . esc_url( $course_url ) . '" data-smartlearn-course-id="' . esc_attr( $course_id ) . '" onclick="event.stopPropagation();">' . get_the_title() . '</a>';
 						echo '</h4>';
 						break;
 						
 					case 'meta':
 						if ( $level || $duration ) {
-							echo '<div class="smartlearn-course-meta" style="font-size: 13px; display: flex; gap: 15px; order: ' . esc_attr($idx) . ';">';
+							echo '<div class="smartlearn-course-meta" style="font-size: 13px; display: flex; gap: 15px;">';
 							if ( $level ) {
 								$level_labels = array('beginner' => __('Початковий', 'smartlearn-lms'), 'intermediate' => __('Середній', 'smartlearn-lms'), 'advanced' => __('Просунутий', 'smartlearn-lms'));
 								echo '<span class="meta-level">' . esc_html( isset($level_labels[$level]) ? $level_labels[$level] : $level ) . '</span>';
@@ -276,11 +276,11 @@ class SmartLearn_LMS_Shortcodes {
 						
 					case 'excerpt':
 						$excerpt_text = wp_trim_words( empty( get_the_excerpt() ) ? wp_strip_all_tags( get_the_content() ) : get_the_excerpt(), 20, '...' );
-						echo '<div class="smartlearn-course-excerpt" style="line-height: 1.5; font-size: 14px; order: ' . esc_attr($idx) . ';">' . esc_html( $excerpt_text ) . '</div>';
+						echo '<div class="smartlearn-course-excerpt" style="line-height: 1.5; font-size: 14px;">' . esc_html( $excerpt_text ) . '</div>';
 						break;
 						
 					case 'button':
-						echo '<div class="smartlearn-course-button-wrap" style="margin-top:auto; order: ' . esc_attr($idx) . ';">';
+						echo '<div class="smartlearn-course-button-wrap" style="margin-top:auto;">';
 						$view_label = get_option( 'smartlearn_lms_button_text_view', __( 'Переглянути', 'smartlearn-lms' ) );
 						$buy_label = get_option( 'smartlearn_lms_button_text_buy', __( 'Купити курс', 'smartlearn-lms' ) );
 						$login_label = get_option( 'smartlearn_lms_button_text_login', __( 'Увійти', 'smartlearn-lms' ) );
