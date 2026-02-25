@@ -24,6 +24,7 @@ class SmartLearn_LMS_Manual_Access {
 		add_action( 'admin_init', array( $this, 'maybe_create_table' ) );
 		add_action( 'admin_post_smartlearn_lms_grant_access', array( $this, 'handle_grant_access' ) );
 		add_action( 'admin_post_smartlearn_lms_delete_access', array( $this, 'handle_delete_access' ) );
+		add_action( 'admin_post_smartlearn_lms_extend_user_accesses', array( $this, 'handle_extend_user_accesses' ) );
 	}
 
 	/**
@@ -129,6 +130,7 @@ class SmartLearn_LMS_Manual_Access {
 		$course_id = isset( $_POST['course_id'] ) ? absint( $_POST['course_id'] ) : 0;
 		$note = isset( $_POST['note'] ) ? sanitize_textarea_field( wp_unslash( $_POST['note'] ) ) : '';
 		$expires_at_raw = isset( $_POST['expires_at'] ) ? sanitize_text_field( wp_unslash( $_POST['expires_at'] ) ) : '';
+		$is_lifetime = isset( $_POST['is_lifetime'] ) ? '1' : '';
 		$redirect = admin_url( 'edit.php?post_type=smartlearn_course&page=smartlearn-lms-access' );
 
 		if ( ! $user_id || ! $course_id ) {
@@ -137,7 +139,7 @@ class SmartLearn_LMS_Manual_Access {
 		}
 
 		$expires_at = null;
-		if ( ! empty( $expires_at_raw ) ) {
+		if ( '1' !== $is_lifetime && ! empty( $expires_at_raw ) ) {
 			$dt = date_create_from_format( 'Y-m-d\TH:i', $expires_at_raw, wp_timezone() );
 			if ( ! $dt ) {
 				wp_safe_redirect( add_query_arg( 'sl_notice', 'invalid_date', $redirect ) );
@@ -186,6 +188,83 @@ class SmartLearn_LMS_Manual_Access {
 		global $wpdb;
 		$deleted = $wpdb->delete( self::get_table_name(), array( 'id' => $id ), array( '%d' ) );
 		wp_safe_redirect( add_query_arg( 'sl_notice', $deleted ? 'deleted' : 'error', $redirect ) );
+		exit;
+	}
+
+	/**
+	 * Handle mass extension for all courses of one user.
+	 */
+	public function handle_extend_user_accesses() {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_die( esc_html__( 'Недостатньо прав.', 'smartlearn-lms' ) );
+		}
+
+		check_admin_referer( 'smartlearn_lms_extend_user_accesses' );
+
+		$user_id = isset( $_POST['bulk_user_id'] ) ? absint( $_POST['bulk_user_id'] ) : 0;
+		$days = isset( $_POST['extend_days'] ) ? absint( $_POST['extend_days'] ) : 0;
+		$set_expires_raw = isset( $_POST['bulk_expires_at'] ) ? sanitize_text_field( wp_unslash( $_POST['bulk_expires_at'] ) ) : '';
+		$is_lifetime = isset( $_POST['bulk_is_lifetime'] ) ? '1' : '';
+		$redirect = admin_url( 'edit.php?post_type=smartlearn_course&page=smartlearn-lms-access' );
+
+		if ( ! $user_id ) {
+			wp_safe_redirect( add_query_arg( 'sl_notice', 'invalid', $redirect ) );
+			exit;
+		}
+
+		global $wpdb;
+		$table_name = self::get_table_name();
+
+		$where = array( 'user_id' => $user_id );
+		$where_format = array( '%d' );
+
+		if ( '1' === $is_lifetime ) {
+			$updated = $wpdb->query(
+				$wpdb->prepare(
+					"UPDATE {$table_name}
+					 SET expires_at = NULL
+					 WHERE user_id = %d",
+					$user_id
+				)
+			);
+		} elseif ( ! empty( $set_expires_raw ) ) {
+			$dt = date_create_from_format( 'Y-m-d\TH:i', $set_expires_raw, wp_timezone() );
+			if ( ! $dt ) {
+				wp_safe_redirect( add_query_arg( 'sl_notice', 'invalid_date', $redirect ) );
+				exit;
+			}
+			$updated = $wpdb->update(
+				$table_name,
+				array( 'expires_at' => $dt->format( 'Y-m-d H:i:s' ) ),
+				$where,
+				array( '%s' ),
+				$where_format
+			);
+		} else {
+			if ( $days <= 0 ) {
+				wp_safe_redirect( add_query_arg( 'sl_notice', 'invalid', $redirect ) );
+				exit;
+			}
+			$updated = $wpdb->query(
+				$wpdb->prepare(
+					"UPDATE {$table_name}
+					 SET expires_at = DATE_ADD(
+					 	CASE
+					 		WHEN expires_at IS NULL OR expires_at < %s THEN %s
+					 		ELSE expires_at
+					 	END,
+					 	INTERVAL %d DAY
+					 )
+					 WHERE user_id = %d",
+					current_time( 'mysql' ),
+					current_time( 'mysql' ),
+					$days,
+					$user_id
+				)
+			);
+		}
+
+		wp_safe_redirect( add_query_arg( 'sl_notice', ( false === $updated ? 'error' : 'extended' ), $redirect ) );
 		exit;
 	}
 
@@ -252,6 +331,8 @@ class SmartLearn_LMS_Manual_Access {
 
 			<?php if ( 'granted' === $notice ) : ?>
 				<div class="notice notice-success is-dismissible"><p><?php esc_html_e( 'Доступ надано.', 'smartlearn-lms' ); ?></p></div>
+			<?php elseif ( 'extended' === $notice ) : ?>
+				<div class="notice notice-success is-dismissible"><p><?php esc_html_e( 'Доступи користувача оновлено.', 'smartlearn-lms' ); ?></p></div>
 			<?php elseif ( 'deleted' === $notice ) : ?>
 				<div class="notice notice-success is-dismissible"><p><?php esc_html_e( 'Доступ видалено.', 'smartlearn-lms' ); ?></p></div>
 			<?php elseif ( in_array( $notice, array( 'invalid', 'invalid_date', 'error' ), true ) ) : ?>
@@ -292,6 +373,9 @@ class SmartLearn_LMS_Manual_Access {
 						<td>
 							<input type="datetime-local" name="expires_at" id="expires_at">
 							<p class="description"><?php esc_html_e( 'Залиште порожнім для безстрокового ручного доступу.', 'smartlearn-lms' ); ?></p>
+							<label style="display:inline-block;margin-top:8px;">
+								<input type="checkbox" name="is_lifetime" value="1"> <?php esc_html_e( 'Безстроковий доступ', 'smartlearn-lms' ); ?>
+							</label>
 						</td>
 					</tr>
 					<tr>
@@ -300,6 +384,45 @@ class SmartLearn_LMS_Manual_Access {
 					</tr>
 				</table>
 				<?php submit_button( __( 'Надати доступ', 'smartlearn-lms' ) ); ?>
+			</form>
+
+			<h2 style="margin-top:24px;"><?php esc_html_e( 'Продовжити всі курси користувачу', 'smartlearn-lms' ); ?></h2>
+			<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" style="background:#fff;border:1px solid #ccd0d4;padding:16px;max-width:1000px;">
+				<?php wp_nonce_field( 'smartlearn_lms_extend_user_accesses' ); ?>
+				<input type="hidden" name="action" value="smartlearn_lms_extend_user_accesses">
+				<table class="form-table">
+					<tr>
+						<th><label for="bulk_user_id"><?php esc_html_e( 'Користувач', 'smartlearn-lms' ); ?></label></th>
+						<td>
+							<select name="bulk_user_id" id="bulk_user_id" required style="min-width:320px;">
+								<option value=""><?php esc_html_e( '— Виберіть користувача —', 'smartlearn-lms' ); ?></option>
+								<?php foreach ( $users as $user ) : ?>
+									<option value="<?php echo esc_attr( $user->ID ); ?>">
+										<?php echo esc_html( $user->display_name . ' (' . $user->user_email . ')' ); ?>
+									</option>
+								<?php endforeach; ?>
+							</select>
+						</td>
+					</tr>
+					<tr>
+						<th><label for="extend_days"><?php esc_html_e( 'Продовжити на (днів)', 'smartlearn-lms' ); ?></label></th>
+						<td>
+							<input type="number" min="1" step="1" id="extend_days" name="extend_days" value="30" class="small-text">
+							<p class="description"><?php esc_html_e( 'Працює для всіх ручних доступів обраного користувача.', 'smartlearn-lms' ); ?></p>
+						</td>
+					</tr>
+					<tr>
+						<th><label for="bulk_expires_at"><?php esc_html_e( 'Або виставити дату', 'smartlearn-lms' ); ?></label></th>
+						<td>
+							<input type="datetime-local" id="bulk_expires_at" name="bulk_expires_at">
+							<p class="description"><?php esc_html_e( 'Якщо вказано, ця дата замінить строк для всіх ручних доступів користувача.', 'smartlearn-lms' ); ?></p>
+							<label style="display:inline-block;margin-top:8px;">
+								<input type="checkbox" name="bulk_is_lifetime" value="1"> <?php esc_html_e( 'Зробити всі доступи безстроковими', 'smartlearn-lms' ); ?>
+							</label>
+						</td>
+					</tr>
+				</table>
+				<?php submit_button( __( 'Продовжити всі курси', 'smartlearn-lms' ), 'secondary' ); ?>
 			</form>
 
 			<div style="margin-top:24px;">
