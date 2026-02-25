@@ -250,10 +250,6 @@ class SmartLearn_LMS_Manual_Access {
 			<h1><?php esc_html_e( 'Доступи', 'smartlearn-lms' ); ?></h1>
 			<p><?php esc_html_e( 'Видавайте доступ вручну та задавайте індивідуальний термін дії.', 'smartlearn-lms' ); ?></p>
 
-			<h2 class="nav-tab-wrapper">
-				<span class="nav-tab nav-tab-active"><?php esc_html_e( 'Доступ до користувачів', 'smartlearn-lms' ); ?></span>
-			</h2>
-
 			<?php if ( 'granted' === $notice ) : ?>
 				<div class="notice notice-success is-dismissible"><p><?php esc_html_e( 'Доступ надано.', 'smartlearn-lms' ); ?></p></div>
 			<?php elseif ( 'deleted' === $notice ) : ?>
