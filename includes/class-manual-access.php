@@ -309,7 +309,7 @@ class SmartLearn_LMS_Manual_Access {
 			<div style="margin-top:24px;">
 			<ul class="subsubsub">
 				<li>
-					<a href="<?php echo esc_url( add_query_arg( array( 'post_type' => 'smartlearn_course', 'page' => 'smartlearn-lms-access', 'status' => 'active' ), admin_url( 'edit.php' ) ); ?>" class="<?php echo 'active' === $status ? 'current' : ''; ?>">
+						<a href="<?php echo esc_url( add_query_arg( array( 'post_type' => 'smartlearn_course', 'page' => 'smartlearn-lms-access', 'status' => 'active' ), admin_url( 'edit.php' ) ) ); ?>" class="<?php echo 'active' === $status ? 'current' : ''; ?>">
 						<?php esc_html_e( 'Активні', 'smartlearn-lms' ); ?>
 					</a> |
 				</li>
