@@ -108,7 +108,7 @@ class SmartLearn_LMS_Manual_Access {
 		add_submenu_page(
 			'edit.php?post_type=smartlearn_course',
 			__( 'Доступи користувачів', 'smartlearn-lms' ),
-			__( 'Доступи', 'smartlearn-lms' ),
+			__( 'Користувачі', 'smartlearn-lms' ),
 			'manage_options',
 			'smartlearn-lms-access',
 			array( $this, 'render_admin_page' )
