@@ -93,6 +93,7 @@ class SmartLearn_Courses_LMS {
 		require_once SMARTLEARN_LMS_PATH . 'includes/class-templates.php';
 		require_once SMARTLEARN_LMS_PATH . 'includes/class-shortcodes.php';
 		require_once SMARTLEARN_LMS_PATH . 'includes/class-settings.php';
+		require_once SMARTLEARN_LMS_PATH . 'includes/class-crm.php';
 		
 		// Initialize components
 		new SmartLearn_LMS_Post_Types();
@@ -102,6 +103,7 @@ class SmartLearn_Courses_LMS {
 		new SmartLearn_LMS_Templates();
 		new SmartLearn_LMS_Shortcodes();
 		new SmartLearn_LMS_Settings();
+		new SmartLearn_LMS_CRM();
 	}
 	
 	public function activate() {
