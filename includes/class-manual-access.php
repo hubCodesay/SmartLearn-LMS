@@ -328,6 +328,11 @@ class SmartLearn_LMS_Manual_Access {
 			wp_die( esc_html__( 'Недостатньо прав.', 'smartlearn-lms' ) );
 		}
 
+		$ui_tab = isset( $_GET['ui_tab'] ) ? sanitize_key( wp_unslash( $_GET['ui_tab'] ) ) : 'list';
+		if ( ! in_array( $ui_tab, array( 'add', 'extend_user', 'extend_all', 'list' ), true ) ) {
+			$ui_tab = 'list';
+		}
+
 		$status = isset( $_GET['status'] ) ? sanitize_key( wp_unslash( $_GET['status'] ) ) : 'active';
 		if ( ! in_array( $status, array( 'active', 'expired', 'all' ), true ) ) {
 			$status = 'active';
@@ -381,6 +386,21 @@ class SmartLearn_LMS_Manual_Access {
 			<h1><?php esc_html_e( 'Доступи', 'smartlearn-lms' ); ?></h1>
 			<p><?php esc_html_e( 'Видавайте доступ вручну та задавайте індивідуальний термін дії.', 'smartlearn-lms' ); ?></p>
 
+			<h2 class="nav-tab-wrapper">
+				<a class="nav-tab <?php echo 'add' === $ui_tab ? 'nav-tab-active' : ''; ?>" href="<?php echo esc_url( add_query_arg( array( 'post_type' => 'smartlearn_course', 'page' => 'smartlearn-lms-access', 'ui_tab' => 'add' ), admin_url( 'edit.php' ) ) ); ?>">
+					<?php esc_html_e( 'Додати доступ', 'smartlearn-lms' ); ?>
+				</a>
+				<a class="nav-tab <?php echo 'extend_user' === $ui_tab ? 'nav-tab-active' : ''; ?>" href="<?php echo esc_url( add_query_arg( array( 'post_type' => 'smartlearn_course', 'page' => 'smartlearn-lms-access', 'ui_tab' => 'extend_user' ), admin_url( 'edit.php' ) ) ); ?>">
+					<?php esc_html_e( 'Продовжити користувачу', 'smartlearn-lms' ); ?>
+				</a>
+				<a class="nav-tab <?php echo 'extend_all' === $ui_tab ? 'nav-tab-active' : ''; ?>" href="<?php echo esc_url( add_query_arg( array( 'post_type' => 'smartlearn_course', 'page' => 'smartlearn-lms-access', 'ui_tab' => 'extend_all' ), admin_url( 'edit.php' ) ) ); ?>">
+					<?php esc_html_e( 'Продовжити всім', 'smartlearn-lms' ); ?>
+				</a>
+				<a class="nav-tab <?php echo 'list' === $ui_tab ? 'nav-tab-active' : ''; ?>" href="<?php echo esc_url( add_query_arg( array( 'post_type' => 'smartlearn_course', 'page' => 'smartlearn-lms-access', 'ui_tab' => 'list', 'status' => $status ), admin_url( 'edit.php' ) ) ); ?>">
+					<?php esc_html_e( 'Список', 'smartlearn-lms' ); ?>
+				</a>
+			</h2>
+
 			<?php if ( 'granted' === $notice ) : ?>
 				<div class="notice notice-success is-dismissible"><p><?php esc_html_e( 'Доступ надано.', 'smartlearn-lms' ); ?></p></div>
 			<?php elseif ( 'extended' === $notice ) : ?>
@@ -393,6 +413,7 @@ class SmartLearn_LMS_Manual_Access {
 				<div class="notice notice-error is-dismissible"><p><?php esc_html_e( 'Не вдалося виконати дію. Перевірте дані.', 'smartlearn-lms' ); ?></p></div>
 			<?php endif; ?>
 
+			<?php if ( 'add' === $ui_tab ) : ?>
 			<h2><?php esc_html_e( 'Додати доступ користувачу', 'smartlearn-lms' ); ?></h2>
 			<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" style="background:#fff;border:1px solid #ccd0d4;padding:16px;max-width:1000px;">
 				<?php wp_nonce_field( 'smartlearn_lms_grant_access' ); ?>
@@ -439,7 +460,9 @@ class SmartLearn_LMS_Manual_Access {
 				</table>
 				<?php submit_button( __( 'Надати доступ', 'smartlearn-lms' ) ); ?>
 			</form>
+			<?php endif; ?>
 
+			<?php if ( 'extend_user' === $ui_tab ) : ?>
 			<h2 style="margin-top:24px;"><?php esc_html_e( 'Продовжити всі курси користувачу', 'smartlearn-lms' ); ?></h2>
 			<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" style="background:#fff;border:1px solid #ccd0d4;padding:16px;max-width:1000px;">
 				<?php wp_nonce_field( 'smartlearn_lms_extend_user_accesses' ); ?>
@@ -478,7 +501,9 @@ class SmartLearn_LMS_Manual_Access {
 				</table>
 				<?php submit_button( __( 'Продовжити всі курси', 'smartlearn-lms' ), 'secondary' ); ?>
 			</form>
+			<?php endif; ?>
 
+			<?php if ( 'extend_all' === $ui_tab ) : ?>
 			<h2 style="margin-top:24px;"><?php esc_html_e( 'Продовжити всім користувачам', 'smartlearn-lms' ); ?></h2>
 			<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" style="background:#fff;border:1px solid #ccd0d4;padding:16px;max-width:1000px;">
 				<?php wp_nonce_field( 'smartlearn_lms_extend_all_accesses' ); ?>
@@ -507,21 +532,23 @@ class SmartLearn_LMS_Manual_Access {
 				</table>
 				<?php submit_button( __( 'Продовжити всім', 'smartlearn-lms' ), 'secondary' ); ?>
 			</form>
+			<?php endif; ?>
 
+			<?php if ( 'list' === $ui_tab ) : ?>
 			<div style="margin-top:24px;">
 			<ul class="subsubsub">
 				<li>
-						<a href="<?php echo esc_url( add_query_arg( array( 'post_type' => 'smartlearn_course', 'page' => 'smartlearn-lms-access', 'status' => 'active' ), admin_url( 'edit.php' ) ) ); ?>" class="<?php echo 'active' === $status ? 'current' : ''; ?>">
-						<?php esc_html_e( 'Активні', 'smartlearn-lms' ); ?>
-					</a> |
+							<a href="<?php echo esc_url( add_query_arg( array( 'post_type' => 'smartlearn_course', 'page' => 'smartlearn-lms-access', 'ui_tab' => 'list', 'status' => 'active' ), admin_url( 'edit.php' ) ) ); ?>" class="<?php echo 'active' === $status ? 'current' : ''; ?>">
+							<?php esc_html_e( 'Активні', 'smartlearn-lms' ); ?>
+						</a> |
 				</li>
 				<li>
-					<a href="<?php echo esc_url( add_query_arg( array( 'post_type' => 'smartlearn_course', 'page' => 'smartlearn-lms-access', 'status' => 'expired' ), admin_url( 'edit.php' ) ) ); ?>" class="<?php echo 'expired' === $status ? 'current' : ''; ?>">
+					<a href="<?php echo esc_url( add_query_arg( array( 'post_type' => 'smartlearn_course', 'page' => 'smartlearn-lms-access', 'ui_tab' => 'list', 'status' => 'expired' ), admin_url( 'edit.php' ) ) ); ?>" class="<?php echo 'expired' === $status ? 'current' : ''; ?>">
 						<?php esc_html_e( 'Протерміновані', 'smartlearn-lms' ); ?>
 					</a> |
 				</li>
 				<li>
-					<a href="<?php echo esc_url( add_query_arg( array( 'post_type' => 'smartlearn_course', 'page' => 'smartlearn-lms-access', 'status' => 'all' ), admin_url( 'edit.php' ) ) ); ?>" class="<?php echo 'all' === $status ? 'current' : ''; ?>">
+					<a href="<?php echo esc_url( add_query_arg( array( 'post_type' => 'smartlearn_course', 'page' => 'smartlearn-lms-access', 'ui_tab' => 'list', 'status' => 'all' ), admin_url( 'edit.php' ) ) ); ?>" class="<?php echo 'all' === $status ? 'current' : ''; ?>">
 						<?php esc_html_e( 'Всі', 'smartlearn-lms' ); ?>
 					</a>
 				</li>
@@ -584,6 +611,7 @@ class SmartLearn_LMS_Manual_Access {
 				</tbody>
 			</table>
 			</div>
+			<?php endif; ?>
 		</div>
 		<?php
 	}
