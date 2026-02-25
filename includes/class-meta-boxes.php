@@ -69,6 +69,7 @@ class SmartLearn_LMS_Meta_Boxes {
 		
 		$product_id = get_post_meta( $post->ID, '_smartlearn_course_product_id', true );
 		$is_free = get_post_meta( $post->ID, '_smartlearn_course_is_free', true );
+		$instructor_name = get_post_meta( $post->ID, '_smartlearn_course_instructor_name', true );
 		
 		?>
 		<div class="-meta-box">
@@ -133,6 +134,16 @@ class SmartLearn_LMS_Meta_Boxes {
 					}
 					?>
 				</select>
+			</p>
+
+			<p>
+				<label for="smartlearn_course_instructor_name">
+					<strong><?php esc_html_e( 'Викладач (ім\'я та прізвище):', 'smartlearn-lms' ); ?></strong>
+				</label><br/>
+				<input type="text" name="smartlearn_course_instructor_name" id="smartlearn_course_instructor_name" value="<?php echo esc_attr( $instructor_name ); ?>" style="width:100%;max-width:400px;" placeholder="<?php esc_attr_e( 'наприклад: Іван Петренко', 'smartlearn-lms' ); ?>" />
+				<p class="description">
+					<?php esc_html_e( 'Якщо поле порожнє, автоматично використовується автор запису курсу.', 'smartlearn-lms' ); ?>
+				</p>
 			</p>
 		</div>
 		
@@ -284,6 +295,10 @@ class SmartLearn_LMS_Meta_Boxes {
 		// Save level
 		$level = isset( $_POST['smartlearn_course_level'] ) ? sanitize_text_field( $_POST['smartlearn_course_level'] ) : 'beginner';
 		update_post_meta( $post_id, '_smartlearn_course_level', $level );
+
+		// Save instructor name override
+		$instructor_name = isset( $_POST['smartlearn_course_instructor_name'] ) ? sanitize_text_field( $_POST['smartlearn_course_instructor_name'] ) : '';
+		update_post_meta( $post_id, '_smartlearn_course_instructor_name', $instructor_name );
 	}
 	
 	/**

@@ -321,10 +321,14 @@ class SmartLearn_LMS_Templates {
     public static function display_course_meta( $course_id ) {
         $duration = get_post_meta( $course_id, '_smartlearn_course_duration', true );
         $level = get_post_meta( $course_id, '_smartlearn_course_level', true );
+        $custom_author_name = trim( (string) get_post_meta( $course_id, '_smartlearn_course_instructor_name', true ) );
+        $author_id = (int) get_post_field( 'post_author', $course_id );
+        $fallback_author_name = $author_id ? get_the_author_meta( 'display_name', $author_id ) : '';
+        $author_name = '' !== $custom_author_name ? $custom_author_name : $fallback_author_name;
         $lessons = self::get_course_lessons( $course_id );
         $lessons_count = count( $lessons );
         
-        if ( ! $duration && ! $level && ! $lessons_count ) {
+        if ( ! $duration && ! $level && ! $lessons_count && ! $author_name ) {
             return;
         }
         
@@ -348,6 +352,13 @@ class SmartLearn_LMS_Templates {
             echo '<div class="smartlearn-course-meta-item duration">';
             echo '<span class="label">' . __( 'Тривалість:', 'smartlearn-lms' ) . '</span> ';
             echo '<span class="value">' . esc_html( $duration ) . '</span>';
+            echo '</div>';
+        }
+
+        if ( $author_name ) {
+            echo '<div class="smartlearn-course-meta-item author">';
+            echo '<span class="label">' . __( 'Автор курсу:', 'smartlearn-lms' ) . '</span> ';
+            echo '<span class="value">' . esc_html( $author_name ) . '</span>';
             echo '</div>';
         }
         

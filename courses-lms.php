@@ -88,6 +88,7 @@ class SmartLearn_Courses_LMS {
 	private function includes() {
 		require_once SMARTLEARN_LMS_PATH . 'includes/class-post-types.php';
 		require_once SMARTLEARN_LMS_PATH . 'includes/class-meta-boxes.php';
+		require_once SMARTLEARN_LMS_PATH . 'includes/class-manual-access.php';
 		require_once SMARTLEARN_LMS_PATH . 'includes/class-access-control.php';
 		require_once SMARTLEARN_LMS_PATH . 'includes/class-templates.php';
 		require_once SMARTLEARN_LMS_PATH . 'includes/class-shortcodes.php';
@@ -96,6 +97,7 @@ class SmartLearn_Courses_LMS {
 		// Initialize components
 		new SmartLearn_LMS_Post_Types();
 		new SmartLearn_LMS_Meta_Boxes();
+		new SmartLearn_LMS_Manual_Access();
 		// Access_Control має тільки статичні методи - не потрібно ініціалізувати
 		new SmartLearn_LMS_Templates();
 		new SmartLearn_LMS_Shortcodes();
@@ -106,6 +108,7 @@ class SmartLearn_Courses_LMS {
 		// Register post types before flushing rewrite rules
 		$post_types = new SmartLearn_LMS_Post_Types();
 		$post_types->register_post_types();
+		SmartLearn_LMS_Manual_Access::create_table();
 		
 		flush_rewrite_rules();
 		

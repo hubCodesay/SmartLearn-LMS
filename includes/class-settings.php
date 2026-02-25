@@ -87,7 +87,7 @@ class SmartLearn_LMS_Settings {
 	public function render_settings_page() {
 		// Отримуємо збережені налаштування для прев'ю
 		$opts = array(
-			'card_layout' => get_option('smartlearn_lms_card_layout', 'thumbnail:1,category:1,title:1,meta:1,excerpt:1,button:1'),
+			'card_layout' => get_option('smartlearn_lms_card_layout', 'thumbnail:1,category:1,title:1,author:1,meta:1,price:1,excerpt:1,button:1'),
 			'image_aspect' => get_option('smartlearn_lms_image_aspect', '16/9'),
 			'card_bg' => get_option('smartlearn_lms_card_bg', '#ffffff'),
 			'card_radius' => get_option('smartlearn_lms_card_radius', '8'),
@@ -162,6 +162,7 @@ class SmartLearn_LMS_Settings {
 			#sl-card-layout-list li input { margin-right: 10px; }
 			#preview-title { font-size: 18px; font-weight: bold; margin: 0; }
 			#preview-meta { font-size: 13px; display: flex; gap: 10px; }
+			#preview-author, #preview-price { font-size: 13px; margin: 0; }
 			#preview-excerpt { font-size: 14px; line-height: 1.5; margin: 0; }
 			#preview-btn {
 				display: inline-block;
@@ -273,14 +274,16 @@ class SmartLearn_LMS_Settings {
 								<tr>
 									<td colspan="2" style="padding-left:0; padding-top:0;">
 										<?php
-										$default_layout = 'thumbnail:1,category:1,title:1,meta:1,excerpt:1,button:1';
+										$default_layout = 'thumbnail:1,category:1,title:1,author:1,meta:1,price:1,excerpt:1,button:1';
 										$saved_layout = $opts['card_layout'];
 										$layout_items = explode(',', $saved_layout);
 										$labels = array(
 											'thumbnail' => __('Зображення', 'smartlearn-lms'),
 											'category' => __('Категорія', 'smartlearn-lms'),
 											'title' => __('Заголовок', 'smartlearn-lms'),
+											'author' => __('Автор курсу', 'smartlearn-lms'),
 											'meta' => __('Мета-дані (рівень, час)', 'smartlearn-lms'),
+											'price' => __('Ціна', 'smartlearn-lms'),
 											'excerpt' => __('Опис', 'smartlearn-lms'),
 											'button' => __('Кнопка', 'smartlearn-lms'),
 										);
@@ -414,10 +417,12 @@ class SmartLearn_LMS_Settings {
 								</div>
 								<div class="preview-cat" data-id="category"><span id="preview-meta-cat">Розробка</span></div>
 								<div id="preview-title" data-id="title">WordPress Plugin Development</div>
+								<div id="preview-author" data-id="author"><span id="preview-meta-author">Автор: John Doe</span></div>
 								<div id="preview-meta" data-id="meta">
 									<span id="preview-meta-level">Початковий</span>
 									<span id="preview-meta-time">2 години</span>
 								</div>
+								<div id="preview-price" data-id="price">Ціна: 1 200 грн</div>
 								<div id="preview-excerpt" data-id="excerpt">Дізнайтеся як створювати професійні плагіни для WordPress з нуля. В цьому курсі ви пройдете всі етапи...</div>
 								<div id="preview-btn-wrap" data-id="button">
 									<a href="#" id="preview-btn">Переглянути курс</a>
@@ -496,7 +501,7 @@ class SmartLearn_LMS_Settings {
 				// Тексти та кольори
 				$('#preview-title').css('color', tColor);
 				$('#preview-excerpt').css('color', textColor);
-				$('#preview-meta-cat, #preview-meta-level, #preview-meta-time').css('color', mColor);
+				$('#preview-meta-cat, #preview-meta-level, #preview-meta-time, #preview-meta-author, #preview-price').css('color', mColor);
 				$('#preview-btn').text(btnLabel)
 					.css({
 						'background-color': btnBg,

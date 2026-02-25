@@ -46,6 +46,24 @@ class SmartLearn_LMS_Shortcodes {
 	}
 
 	/**
+	 * Get WooCommerce product price HTML linked to the course.
+	 */
+	private function get_course_price_html( $course_id ) {
+		$product_id = get_post_meta( $course_id, '_smartlearn_course_product_id', true );
+		$product_id = $product_id ? absint( $product_id ) : 0;
+		if ( ! $product_id || ! function_exists( 'wc_get_product' ) ) {
+			return '';
+		}
+
+		$product = wc_get_product( $product_id );
+		if ( ! $product ) {
+			return '';
+		}
+
+		return (string) $product->get_price_html();
+	}
+
+	/**
 	 * Get a reliable course URL.
 	 */
 	private function get_course_preview_url( $course_id ) {
@@ -133,7 +151,7 @@ class SmartLearn_LMS_Shortcodes {
 			}
 			.smartlearn-course-title a { color: {$opts['title_color']} !important; text-decoration: none; }
 			.smartlearn-course-excerpt { color: {$opts['text_color']} !important; }
-			.smartlearn-course-categories a, .smartlearn-course-meta span { color: {$opts['meta_color']} !important; }
+			.smartlearn-course-categories a, .smartlearn-course-meta span, .smartlearn-course-author, .smartlearn-course-price { color: {$opts['meta_color']} !important; }
 			.smartlearn-course-button {
 				background-color: {$opts['btn_bg']} !important;
 				color: {$opts['btn_txt_color']} !important;
@@ -192,7 +210,7 @@ class SmartLearn_LMS_Shortcodes {
 		$columns = intval( $atts['columns'] );
 		$columns_class = 'columns-' . $columns;
 		
-		$layout_str = get_option('smartlearn_lms_card_layout', 'thumbnail:1,category:1,title:1,meta:1,excerpt:1,button:1');
+		$layout_str = get_option('smartlearn_lms_card_layout', 'thumbnail:1,category:1,title:1,author:1,meta:1,price:1,excerpt:1,button:1');
 		$layout_items = explode(',', $layout_str);
 		$ordered_blocks = array();
 		foreach($layout_items as $item) {
@@ -216,6 +234,11 @@ class SmartLearn_LMS_Shortcodes {
 			$is_free = get_post_meta( $course_id, '_smartlearn_course_is_free', true ) === '1';
 			$duration = get_post_meta( $course_id, '_smartlearn_course_duration', true );
 			$level = get_post_meta( $course_id, '_smartlearn_course_level', true );
+			$custom_author_name = trim( (string) get_post_meta( $course_id, '_smartlearn_course_instructor_name', true ) );
+			$author_id = (int) get_post_field( 'post_author', $course_id );
+			$fallback_author_name = $author_id ? get_the_author_meta( 'display_name', $author_id ) : '';
+			$author_name = '' !== $custom_author_name ? $custom_author_name : $fallback_author_name;
+			$course_price_html = $this->get_course_price_html( $course_id );
 			
 			$classes = array( 'smartlearn-course-item' );
 			if ( $has_access ) $classes[] = 'has-access';
@@ -261,6 +284,14 @@ class SmartLearn_LMS_Shortcodes {
 						echo '<a href="' . esc_url( $course_url ) . '" data-smartlearn-course-id="' . esc_attr( $course_id ) . '" onclick="event.stopPropagation();">' . get_the_title() . '</a>';
 						echo '</h4>';
 						break;
+
+					case 'author':
+						if ( $author_name ) {
+							echo '<div class="smartlearn-course-author" style="font-size: 13px;">';
+							echo '<span class="meta-author">' . sprintf( esc_html__( 'Автор: %s', 'smartlearn-lms' ), esc_html( $author_name ) ) . '</span>';
+							echo '</div>';
+						}
+						break;
 						
 					case 'meta':
 						if ( $level || $duration ) {
@@ -270,6 +301,14 @@ class SmartLearn_LMS_Shortcodes {
 								echo '<span class="meta-level">' . esc_html( isset($level_labels[$level]) ? $level_labels[$level] : $level ) . '</span>';
 							}
 							if ( $duration ) echo '<span class="meta-duration">' . esc_html( $duration ) . '</span>';
+							echo '</div>';
+						}
+						break;
+
+					case 'price':
+						if ( $course_price_html ) {
+							echo '<div class="smartlearn-course-price" style="font-size: 14px; font-weight: 600;">';
+							echo wp_kses_post( $course_price_html );
 							echo '</div>';
 						}
 						break;

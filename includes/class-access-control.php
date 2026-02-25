@@ -40,6 +40,11 @@ class SmartLearn_LMS_Access_Control {
 		if ( ! $user_id ) {
 			return false;
 		}
+
+		// Перевірити ручний доступ (адміном виданий доступ з терміном)
+		if ( class_exists( 'SmartLearn_LMS_Manual_Access' ) && SmartLearn_LMS_Manual_Access::user_has_active_access( $user_id, $course_id ) ) {
+			return true;
+		}
 		
 		// Отримати прив'язаний товар
 		$product_id = get_post_meta( $course_id, '_smartlearn_course_product_id', true );
