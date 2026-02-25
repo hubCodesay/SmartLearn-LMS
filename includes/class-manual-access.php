@@ -197,6 +197,11 @@ class SmartLearn_LMS_Manual_Access {
 			wp_die( esc_html__( 'Недостатньо прав.', 'smartlearn-lms' ) );
 		}
 
+		$access_tab = isset( $_GET['access_tab'] ) ? sanitize_key( wp_unslash( $_GET['access_tab'] ) ) : 'users';
+		if ( ! in_array( $access_tab, array( 'users', 'courses' ), true ) ) {
+			$access_tab = 'users';
+		}
+
 		$status = isset( $_GET['status'] ) ? sanitize_key( wp_unslash( $_GET['status'] ) ) : 'active';
 		if ( ! in_array( $status, array( 'active', 'expired', 'all' ), true ) ) {
 			$status = 'active';
@@ -212,21 +217,41 @@ class SmartLearn_LMS_Manual_Access {
 		} elseif ( 'expired' === $status ) {
 			$where .= $wpdb->prepare( ' AND a.expires_at IS NOT NULL AND a.expires_at < %s', $now );
 		}
+		$now_sql = esc_sql( $now );
 
-		$rows = $wpdb->get_results(
-			"SELECT a.*,
-			        u.display_name AS user_name,
-			        u.user_email AS user_email,
-			        p.post_title AS course_title,
-			        g.display_name AS granted_by_name
-			 FROM {$table_name} a
-			 LEFT JOIN {$wpdb->users} u ON u.ID = a.user_id
-			 LEFT JOIN {$wpdb->posts} p ON p.ID = a.course_id
-			 LEFT JOIN {$wpdb->users} g ON g.ID = a.granted_by
-			 WHERE {$where}
-			 ORDER BY a.created_at DESC
-			 LIMIT 500"
-		);
+		$rows = array();
+		$course_rows = array();
+		if ( 'users' === $access_tab ) {
+			$rows = $wpdb->get_results(
+				"SELECT a.*,
+				        u.display_name AS user_name,
+				        u.user_email AS user_email,
+				        p.post_title AS course_title,
+				        g.display_name AS granted_by_name
+				 FROM {$table_name} a
+				 LEFT JOIN {$wpdb->users} u ON u.ID = a.user_id
+				 LEFT JOIN {$wpdb->posts} p ON p.ID = a.course_id
+				 LEFT JOIN {$wpdb->users} g ON g.ID = a.granted_by
+				 WHERE {$where}
+				 ORDER BY a.created_at DESC
+				 LIMIT 500"
+			);
+		} else {
+			$course_rows = $wpdb->get_results(
+				"SELECT a.course_id,
+				        p.post_title AS course_title,
+				        COUNT(*) AS total_accesses,
+				        SUM(CASE WHEN a.expires_at IS NULL OR a.expires_at >= '{$now_sql}' THEN 1 ELSE 0 END) AS active_accesses,
+				        SUM(CASE WHEN a.expires_at IS NOT NULL AND a.expires_at < '{$now_sql}' THEN 1 ELSE 0 END) AS expired_accesses,
+				        MAX(a.created_at) AS last_granted_at
+				 FROM {$table_name} a
+				 LEFT JOIN {$wpdb->posts} p ON p.ID = a.course_id
+				 WHERE {$where}
+				 GROUP BY a.course_id, p.post_title
+				 ORDER BY last_granted_at DESC
+				 LIMIT 500"
+			);
+		}
 
 		$courses = get_posts(
 			array(
@@ -248,8 +273,17 @@ class SmartLearn_LMS_Manual_Access {
 		$notice = isset( $_GET['sl_notice'] ) ? sanitize_key( wp_unslash( $_GET['sl_notice'] ) ) : '';
 		?>
 		<div class="wrap">
-			<h1><?php esc_html_e( 'Доступи користувачів до курсів', 'smartlearn-lms' ); ?></h1>
+			<h1><?php esc_html_e( 'Доступи', 'smartlearn-lms' ); ?></h1>
 			<p><?php esc_html_e( 'Видавайте доступ вручну та задавайте індивідуальний термін дії.', 'smartlearn-lms' ); ?></p>
+
+			<h2 class="nav-tab-wrapper">
+				<a href="<?php echo esc_url( add_query_arg( array( 'post_type' => 'smartlearn_course', 'page' => 'smartlearn-lms-access', 'access_tab' => 'users', 'status' => $status ), admin_url( 'edit.php' ) ) ); ?>" class="nav-tab <?php echo 'users' === $access_tab ? 'nav-tab-active' : ''; ?>">
+					<?php esc_html_e( 'Доступ до користувачів', 'smartlearn-lms' ); ?>
+				</a>
+				<a href="<?php echo esc_url( add_query_arg( array( 'post_type' => 'smartlearn_course', 'page' => 'smartlearn-lms-access', 'access_tab' => 'courses', 'status' => $status ), admin_url( 'edit.php' ) ) ); ?>" class="nav-tab <?php echo 'courses' === $access_tab ? 'nav-tab-active' : ''; ?>">
+					<?php esc_html_e( 'Доступи до курсів', 'smartlearn-lms' ); ?>
+				</a>
+			</h2>
 
 			<?php if ( 'granted' === $notice ) : ?>
 				<div class="notice notice-success is-dismissible"><p><?php esc_html_e( 'Доступ надано.', 'smartlearn-lms' ); ?></p></div>
@@ -259,126 +293,157 @@ class SmartLearn_LMS_Manual_Access {
 				<div class="notice notice-error is-dismissible"><p><?php esc_html_e( 'Не вдалося виконати дію. Перевірте дані.', 'smartlearn-lms' ); ?></p></div>
 			<?php endif; ?>
 
-			<h2><?php esc_html_e( 'Додати доступ', 'smartlearn-lms' ); ?></h2>
-			<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" style="background:#fff;border:1px solid #ccd0d4;padding:16px;max-width:1000px;">
-				<?php wp_nonce_field( 'smartlearn_lms_grant_access' ); ?>
-				<input type="hidden" name="action" value="smartlearn_lms_grant_access">
-				<table class="form-table">
-					<tr>
-						<th><label for="user_id"><?php esc_html_e( 'Користувач', 'smartlearn-lms' ); ?></label></th>
-						<td>
-							<select name="user_id" id="user_id" required style="min-width:320px;">
-								<option value=""><?php esc_html_e( '— Виберіть користувача —', 'smartlearn-lms' ); ?></option>
-								<?php foreach ( $users as $user ) : ?>
-									<option value="<?php echo esc_attr( $user->ID ); ?>">
-										<?php echo esc_html( $user->display_name . ' (' . $user->user_email . ')' ); ?>
-									</option>
-								<?php endforeach; ?>
-							</select>
-						</td>
-					</tr>
-					<tr>
-						<th><label for="course_id"><?php esc_html_e( 'Курс', 'smartlearn-lms' ); ?></label></th>
-						<td>
-							<select name="course_id" id="course_id" required style="min-width:320px;">
-								<option value=""><?php esc_html_e( '— Виберіть курс —', 'smartlearn-lms' ); ?></option>
-								<?php foreach ( $courses as $course ) : ?>
-									<option value="<?php echo esc_attr( $course->ID ); ?>"><?php echo esc_html( $course->post_title ); ?></option>
-								<?php endforeach; ?>
-							</select>
-						</td>
-					</tr>
-					<tr>
-						<th><label for="expires_at"><?php esc_html_e( 'Дійсний до', 'smartlearn-lms' ); ?></label></th>
-						<td>
-							<input type="datetime-local" name="expires_at" id="expires_at">
-							<p class="description"><?php esc_html_e( 'Залиште порожнім для безстрокового ручного доступу.', 'smartlearn-lms' ); ?></p>
-						</td>
-					</tr>
-					<tr>
-						<th><label for="note"><?php esc_html_e( 'Нотатка', 'smartlearn-lms' ); ?></label></th>
-						<td><textarea name="note" id="note" rows="3" style="width:100%;max-width:600px;"></textarea></td>
-					</tr>
-				</table>
-				<?php submit_button( __( 'Надати доступ', 'smartlearn-lms' ) ); ?>
-			</form>
+			<?php if ( 'users' === $access_tab ) : ?>
+				<h2><?php esc_html_e( 'Додати доступ користувачу', 'smartlearn-lms' ); ?></h2>
+				<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" style="background:#fff;border:1px solid #ccd0d4;padding:16px;max-width:1000px;">
+					<?php wp_nonce_field( 'smartlearn_lms_grant_access' ); ?>
+					<input type="hidden" name="action" value="smartlearn_lms_grant_access">
+					<table class="form-table">
+						<tr>
+							<th><label for="user_id"><?php esc_html_e( 'Користувач', 'smartlearn-lms' ); ?></label></th>
+							<td>
+								<select name="user_id" id="user_id" required style="min-width:320px;">
+									<option value=""><?php esc_html_e( '— Виберіть користувача —', 'smartlearn-lms' ); ?></option>
+									<?php foreach ( $users as $user ) : ?>
+										<option value="<?php echo esc_attr( $user->ID ); ?>">
+											<?php echo esc_html( $user->display_name . ' (' . $user->user_email . ')' ); ?>
+										</option>
+									<?php endforeach; ?>
+								</select>
+							</td>
+						</tr>
+						<tr>
+							<th><label for="course_id"><?php esc_html_e( 'Курс', 'smartlearn-lms' ); ?></label></th>
+							<td>
+								<select name="course_id" id="course_id" required style="min-width:320px;">
+									<option value=""><?php esc_html_e( '— Виберіть курс —', 'smartlearn-lms' ); ?></option>
+									<?php foreach ( $courses as $course ) : ?>
+										<option value="<?php echo esc_attr( $course->ID ); ?>"><?php echo esc_html( $course->post_title ); ?></option>
+									<?php endforeach; ?>
+								</select>
+							</td>
+						</tr>
+						<tr>
+							<th><label for="expires_at"><?php esc_html_e( 'Дійсний до', 'smartlearn-lms' ); ?></label></th>
+							<td>
+								<input type="datetime-local" name="expires_at" id="expires_at">
+								<p class="description"><?php esc_html_e( 'Залиште порожнім для безстрокового ручного доступу.', 'smartlearn-lms' ); ?></p>
+							</td>
+						</tr>
+						<tr>
+							<th><label for="note"><?php esc_html_e( 'Нотатка', 'smartlearn-lms' ); ?></label></th>
+							<td><textarea name="note" id="note" rows="3" style="width:100%;max-width:600px;"></textarea></td>
+						</tr>
+					</table>
+					<?php submit_button( __( 'Надати доступ', 'smartlearn-lms' ) ); ?>
+				</form>
+			<?php endif; ?>
 
 			<h2 style="margin-top:24px;"><?php esc_html_e( 'Список доступів', 'smartlearn-lms' ); ?></h2>
 			<ul class="subsubsub">
 				<li>
-					<a href="<?php echo esc_url( add_query_arg( array( 'post_type' => 'smartlearn_course', 'page' => 'smartlearn-lms-access', 'status' => 'active' ), admin_url( 'edit.php' ) ) ); ?>" class="<?php echo 'active' === $status ? 'current' : ''; ?>">
+					<a href="<?php echo esc_url( add_query_arg( array( 'post_type' => 'smartlearn_course', 'page' => 'smartlearn-lms-access', 'access_tab' => $access_tab, 'status' => 'active' ), admin_url( 'edit.php' ) ) ); ?>" class="<?php echo 'active' === $status ? 'current' : ''; ?>">
 						<?php esc_html_e( 'Активні', 'smartlearn-lms' ); ?>
 					</a> |
 				</li>
 				<li>
-					<a href="<?php echo esc_url( add_query_arg( array( 'post_type' => 'smartlearn_course', 'page' => 'smartlearn-lms-access', 'status' => 'expired' ), admin_url( 'edit.php' ) ) ); ?>" class="<?php echo 'expired' === $status ? 'current' : ''; ?>">
+					<a href="<?php echo esc_url( add_query_arg( array( 'post_type' => 'smartlearn_course', 'page' => 'smartlearn-lms-access', 'access_tab' => $access_tab, 'status' => 'expired' ), admin_url( 'edit.php' ) ) ); ?>" class="<?php echo 'expired' === $status ? 'current' : ''; ?>">
 						<?php esc_html_e( 'Протерміновані', 'smartlearn-lms' ); ?>
 					</a> |
 				</li>
 				<li>
-					<a href="<?php echo esc_url( add_query_arg( array( 'post_type' => 'smartlearn_course', 'page' => 'smartlearn-lms-access', 'status' => 'all' ), admin_url( 'edit.php' ) ) ); ?>" class="<?php echo 'all' === $status ? 'current' : ''; ?>">
+					<a href="<?php echo esc_url( add_query_arg( array( 'post_type' => 'smartlearn_course', 'page' => 'smartlearn-lms-access', 'access_tab' => $access_tab, 'status' => 'all' ), admin_url( 'edit.php' ) ) ); ?>" class="<?php echo 'all' === $status ? 'current' : ''; ?>">
 						<?php esc_html_e( 'Всі', 'smartlearn-lms' ); ?>
 					</a>
 				</li>
 			</ul>
 
-			<table class="widefat striped" style="margin-top:12px;">
-				<thead>
-					<tr>
-						<th><?php esc_html_e( 'Користувач', 'smartlearn-lms' ); ?></th>
-						<th><?php esc_html_e( 'Курс', 'smartlearn-lms' ); ?></th>
-						<th><?php esc_html_e( 'Надано', 'smartlearn-lms' ); ?></th>
-						<th><?php esc_html_e( 'Дійсний до', 'smartlearn-lms' ); ?></th>
-						<th><?php esc_html_e( 'Статус', 'smartlearn-lms' ); ?></th>
-						<th><?php esc_html_e( 'Адмін', 'smartlearn-lms' ); ?></th>
-						<th><?php esc_html_e( 'Дія', 'smartlearn-lms' ); ?></th>
-					</tr>
-				</thead>
-				<tbody>
-					<?php if ( empty( $rows ) ) : ?>
-						<tr><td colspan="7"><?php esc_html_e( 'Записів немає.', 'smartlearn-lms' ); ?></td></tr>
-					<?php else : ?>
-						<?php foreach ( $rows as $row ) : ?>
-							<?php
-							$is_active = empty( $row->expires_at ) || $row->expires_at >= $now;
-							$delete_url = wp_nonce_url(
-								add_query_arg(
-									array(
-										'action' => 'smartlearn_lms_delete_access',
-										'id' => absint( $row->id ),
+			<?php if ( 'users' === $access_tab ) : ?>
+				<table class="widefat striped" style="margin-top:12px;">
+					<thead>
+						<tr>
+							<th><?php esc_html_e( 'Користувач', 'smartlearn-lms' ); ?></th>
+							<th><?php esc_html_e( 'Курс', 'smartlearn-lms' ); ?></th>
+							<th><?php esc_html_e( 'Надано', 'smartlearn-lms' ); ?></th>
+							<th><?php esc_html_e( 'Дійсний до', 'smartlearn-lms' ); ?></th>
+							<th><?php esc_html_e( 'Статус', 'smartlearn-lms' ); ?></th>
+							<th><?php esc_html_e( 'Адмін', 'smartlearn-lms' ); ?></th>
+							<th><?php esc_html_e( 'Дія', 'smartlearn-lms' ); ?></th>
+						</tr>
+					</thead>
+					<tbody>
+						<?php if ( empty( $rows ) ) : ?>
+							<tr><td colspan="7"><?php esc_html_e( 'Записів немає.', 'smartlearn-lms' ); ?></td></tr>
+						<?php else : ?>
+							<?php foreach ( $rows as $row ) : ?>
+								<?php
+								$is_active = empty( $row->expires_at ) || $row->expires_at >= $now;
+								$delete_url = wp_nonce_url(
+									add_query_arg(
+										array(
+											'action' => 'smartlearn_lms_delete_access',
+											'id' => absint( $row->id ),
+										),
+										admin_url( 'admin-post.php' )
 									),
-									admin_url( 'admin-post.php' )
-								),
-								'smartlearn_lms_delete_access_' . absint( $row->id )
-							);
-							?>
-							<tr>
-								<td>
-									<strong><?php echo esc_html( $row->user_name ? $row->user_name : ( '#' . absint( $row->user_id ) ) ); ?></strong><br>
-									<small><?php echo esc_html( $row->user_email ); ?></small>
-								</td>
-								<td><?php echo esc_html( $row->course_title ? $row->course_title : ( '#' . absint( $row->course_id ) ) ); ?></td>
-								<td><?php echo esc_html( $row->created_at ); ?></td>
-								<td><?php echo esc_html( $row->expires_at ? $row->expires_at : __( 'Безстроково', 'smartlearn-lms' ) ); ?></td>
-								<td>
-									<?php if ( $is_active ) : ?>
-										<span style="color:#0a7a00;font-weight:600;"><?php esc_html_e( 'Активний', 'smartlearn-lms' ); ?></span>
-									<?php else : ?>
-										<span style="color:#b32d2e;font-weight:600;"><?php esc_html_e( 'Завершений', 'smartlearn-lms' ); ?></span>
-									<?php endif; ?>
-								</td>
-								<td><?php echo esc_html( $row->granted_by_name ? $row->granted_by_name : ( '#' . absint( $row->granted_by ) ) ); ?></td>
-								<td><a class="button button-small" href="<?php echo esc_url( $delete_url ); ?>" onclick="return confirm('<?php echo esc_js( __( 'Видалити цей доступ?', 'smartlearn-lms' ) ); ?>');"><?php esc_html_e( 'Видалити', 'smartlearn-lms' ); ?></a></td>
-							</tr>
-							<?php if ( ! empty( $row->note ) ) : ?>
+									'smartlearn_lms_delete_access_' . absint( $row->id )
+								);
+								?>
 								<tr>
-									<td colspan="7"><em><?php echo esc_html( $row->note ); ?></em></td>
+									<td>
+										<strong><?php echo esc_html( $row->user_name ? $row->user_name : ( '#' . absint( $row->user_id ) ) ); ?></strong><br>
+										<small><?php echo esc_html( $row->user_email ); ?></small>
+									</td>
+									<td><?php echo esc_html( $row->course_title ? $row->course_title : ( '#' . absint( $row->course_id ) ) ); ?></td>
+									<td><?php echo esc_html( $row->created_at ); ?></td>
+									<td><?php echo esc_html( $row->expires_at ? $row->expires_at : __( 'Безстроково', 'smartlearn-lms' ) ); ?></td>
+									<td>
+										<?php if ( $is_active ) : ?>
+											<span style="color:#0a7a00;font-weight:600;"><?php esc_html_e( 'Активний', 'smartlearn-lms' ); ?></span>
+										<?php else : ?>
+											<span style="color:#b32d2e;font-weight:600;"><?php esc_html_e( 'Завершений', 'smartlearn-lms' ); ?></span>
+										<?php endif; ?>
+									</td>
+									<td><?php echo esc_html( $row->granted_by_name ? $row->granted_by_name : ( '#' . absint( $row->granted_by ) ) ); ?></td>
+									<td><a class="button button-small" href="<?php echo esc_url( $delete_url ); ?>" onclick="return confirm('<?php echo esc_js( __( 'Видалити цей доступ?', 'smartlearn-lms' ) ); ?>');"><?php esc_html_e( 'Видалити', 'smartlearn-lms' ); ?></a></td>
 								</tr>
-							<?php endif; ?>
-						<?php endforeach; ?>
-					<?php endif; ?>
-				</tbody>
-			</table>
+								<?php if ( ! empty( $row->note ) ) : ?>
+									<tr>
+										<td colspan="7"><em><?php echo esc_html( $row->note ); ?></em></td>
+									</tr>
+								<?php endif; ?>
+							<?php endforeach; ?>
+						<?php endif; ?>
+					</tbody>
+				</table>
+			<?php else : ?>
+				<table class="widefat striped" style="margin-top:12px;">
+					<thead>
+						<tr>
+							<th><?php esc_html_e( 'Курс', 'smartlearn-lms' ); ?></th>
+							<th><?php esc_html_e( 'Всього доступів', 'smartlearn-lms' ); ?></th>
+							<th><?php esc_html_e( 'Активних', 'smartlearn-lms' ); ?></th>
+							<th><?php esc_html_e( 'Завершених', 'smartlearn-lms' ); ?></th>
+							<th><?php esc_html_e( 'Остання видача', 'smartlearn-lms' ); ?></th>
+						</tr>
+					</thead>
+					<tbody>
+						<?php if ( empty( $course_rows ) ) : ?>
+							<tr><td colspan="5"><?php esc_html_e( 'Записів немає.', 'smartlearn-lms' ); ?></td></tr>
+						<?php else : ?>
+							<?php foreach ( $course_rows as $course_row ) : ?>
+								<tr>
+									<td><?php echo esc_html( $course_row->course_title ? $course_row->course_title : ( '#' . absint( $course_row->course_id ) ) ); ?></td>
+									<td><?php echo esc_html( (int) $course_row->total_accesses ); ?></td>
+									<td><?php echo esc_html( (int) $course_row->active_accesses ); ?></td>
+									<td><?php echo esc_html( (int) $course_row->expired_accesses ); ?></td>
+									<td><?php echo esc_html( $course_row->last_granted_at ); ?></td>
+								</tr>
+							<?php endforeach; ?>
+						<?php endif; ?>
+					</tbody>
+				</table>
+			<?php endif; ?>
 		</div>
 		<?php
 	}
