@@ -70,6 +70,109 @@ class SmartLearn_LMS_Manual_Access {
 	}
 
 	/**
+	 * Get user IDs who have access to a course (manual + purchases + free courses).
+	 *
+	 * @param int  $course_id
+	 * @param bool $include_free_all_users
+	 * @return array
+	 */
+	public static function get_course_user_ids( $course_id, $include_free_all_users = true ) {
+		global $wpdb;
+
+		$course_id = absint( $course_id );
+		if ( ! $course_id ) {
+			return array();
+		}
+
+		$user_ids = array();
+
+		// Manual access users.
+		$table_name = self::get_table_name();
+		$manual_ids = $wpdb->get_col(
+			$wpdb->prepare(
+				"SELECT DISTINCT user_id FROM {$table_name} WHERE course_id = %d",
+				$course_id
+			)
+		);
+		if ( ! empty( $manual_ids ) ) {
+			$user_ids = array_merge( $user_ids, array_map( 'absint', $manual_ids ) );
+		}
+
+		// Purchases via WooCommerce.
+		$product_id = absint( get_post_meta( $course_id, '_smartlearn_course_product_id', true ) );
+		if ( $product_id && class_exists( 'WooCommerce' ) ) {
+			$purchased_ids = self::get_user_ids_by_product_purchase( $product_id );
+			if ( ! empty( $purchased_ids ) ) {
+				$user_ids = array_merge( $user_ids, array_map( 'absint', $purchased_ids ) );
+			}
+		}
+
+		// Free course: include all users if requested.
+		$is_free = get_post_meta( $course_id, '_smartlearn_course_is_free', true );
+		if ( $include_free_all_users && '1' === $is_free ) {
+			$all_users = get_users(
+				array(
+					'fields' => 'ID',
+					'number' => 2000,
+				)
+			);
+			if ( ! empty( $all_users ) ) {
+				$user_ids = array_merge( $user_ids, array_map( 'absint', $all_users ) );
+			}
+		}
+
+		$user_ids = array_filter( array_unique( $user_ids ) );
+		sort( $user_ids );
+
+		return $user_ids;
+	}
+
+	/**
+	 * Get user IDs that purchased a WooCommerce product.
+	 *
+	 * @param int $product_id
+	 * @return array
+	 */
+	private static function get_user_ids_by_product_purchase( $product_id ) {
+		global $wpdb;
+
+		$product_id = absint( $product_id );
+		if ( ! $product_id ) {
+			return array();
+		}
+
+		$order_statuses = array( 'wc-completed', 'wc-processing', 'wc-on-hold' );
+		$status_placeholders = implode( ',', array_fill( 0, count( $order_statuses ), '%s' ) );
+
+		$sql = "
+			SELECT DISTINCT pm.meta_value AS user_id
+			FROM {$wpdb->prefix}woocommerce_order_items oi
+			INNER JOIN {$wpdb->prefix}woocommerce_order_itemmeta oim
+				ON oi.order_item_id = oim.order_item_id
+			INNER JOIN {$wpdb->posts} p
+				ON p.ID = oi.order_id
+			INNER JOIN {$wpdb->postmeta} pm
+				ON pm.post_id = p.ID AND pm.meta_key = '_customer_user'
+			WHERE oi.order_item_type = 'line_item'
+			  AND oim.meta_key = '_product_id'
+			  AND oim.meta_value = %d
+			  AND p.post_type = 'shop_order'
+			  AND p.post_status IN ({$status_placeholders})
+			  AND pm.meta_value > 0
+		";
+
+		$params = array_merge( array( $product_id ), $order_statuses );
+		$prepared = $wpdb->prepare( $sql, $params );
+
+		$rows = $wpdb->get_col( $prepared );
+		if ( empty( $rows ) ) {
+			return array();
+		}
+
+		return array_map( 'absint', $rows );
+	}
+
+	/**
 	 * Check if user has active manual access to course.
 	 *
 	 * @param int $user_id
@@ -132,7 +235,7 @@ class SmartLearn_LMS_Manual_Access {
 		$note = isset( $_POST['note'] ) ? sanitize_textarea_field( wp_unslash( $_POST['note'] ) ) : '';
 		$expires_at_raw = isset( $_POST['expires_at'] ) ? sanitize_text_field( wp_unslash( $_POST['expires_at'] ) ) : '';
 		$is_lifetime = isset( $_POST['is_lifetime'] ) ? '1' : '';
-		$redirect = admin_url( 'edit.php?post_type=smartlearn_course&page=smartlearn-lms-access' );
+		$redirect = admin_url( 'edit.php?post_type=smartlearn_course&page=smartlearn-lms-access&ui_tab=extend_all' );
 
 		if ( ! $user_id || ! $course_id ) {
 			wp_safe_redirect( add_query_arg( 'sl_notice', 'invalid', $redirect ) );
@@ -279,42 +382,89 @@ class SmartLearn_LMS_Manual_Access {
 
 		check_admin_referer( 'smartlearn_lms_extend_all_accesses' );
 
+		$course_id = isset( $_POST['course_id'] ) ? absint( $_POST['course_id'] ) : 0;
 		$days = isset( $_POST['all_extend_days'] ) ? absint( $_POST['all_extend_days'] ) : 0;
 		$exclude_user_ids = isset( $_POST['exclude_user_ids'] ) ? array_map( 'absint', (array) wp_unslash( $_POST['exclude_user_ids'] ) ) : array();
 		$exclude_user_ids = array_values( array_filter( $exclude_user_ids ) );
 		$redirect = admin_url( 'edit.php?post_type=smartlearn_course&page=smartlearn-lms-access' );
 
-		if ( $days <= 0 ) {
+		if ( ! $course_id || $days <= 0 ) {
+			wp_safe_redirect( add_query_arg( 'sl_notice', 'invalid', $redirect ) );
+			exit;
+		}
+		$redirect = add_query_arg( 'course_id', $course_id, $redirect );
+
+		$course_user_ids = self::get_course_user_ids( $course_id, true );
+		if ( empty( $course_user_ids ) ) {
+			wp_safe_redirect( add_query_arg( 'sl_notice', 'invalid', $redirect ) );
+			exit;
+		}
+
+		if ( ! empty( $exclude_user_ids ) ) {
+			$course_user_ids = array_values( array_diff( $course_user_ids, $exclude_user_ids ) );
+		}
+
+		if ( empty( $course_user_ids ) ) {
 			wp_safe_redirect( add_query_arg( 'sl_notice', 'invalid', $redirect ) );
 			exit;
 		}
 
 		global $wpdb;
 		$table_name = self::get_table_name();
+		$now = current_time( 'mysql' );
 
-		$sql = "UPDATE {$table_name}
-			SET expires_at = DATE_ADD(
-				CASE
-					WHEN expires_at < %s THEN %s
-					ELSE expires_at
-				END,
-				INTERVAL %d DAY
-			)
-			WHERE expires_at IS NOT NULL";
+		$updated = 0;
+		$chunk_size = 200;
+		$chunks = array_chunk( $course_user_ids, $chunk_size );
 
-		$params = array(
-			current_time( 'mysql' ),
-			current_time( 'mysql' ),
-			$days,
-		);
+		foreach ( $chunks as $chunk ) {
+			$placeholders = implode( ',', array_fill( 0, count( $chunk ), '%d' ) );
+			$params = array_merge(
+				array( $now, $now, $days, $course_id ),
+				$chunk
+			);
 
-		if ( ! empty( $exclude_user_ids ) ) {
-			$placeholders = implode( ',', array_fill( 0, count( $exclude_user_ids ), '%d' ) );
-			$sql .= " AND user_id NOT IN ({$placeholders})";
-			$params = array_merge( $params, $exclude_user_ids );
+			$sql = "UPDATE {$table_name}
+				SET expires_at = DATE_ADD(
+					CASE
+						WHEN expires_at IS NULL OR expires_at < %s THEN %s
+						ELSE expires_at
+					END,
+					INTERVAL %d DAY
+				)
+				WHERE course_id = %d
+				  AND user_id IN ({$placeholders})
+				  AND expires_at IS NOT NULL";
+
+			$updated += (int) $wpdb->query( $wpdb->prepare( $sql, $params ) );
 		}
 
-		$updated = $wpdb->query( $wpdb->prepare( $sql, $params ) );
+		$existing_ids = $wpdb->get_col(
+			$wpdb->prepare(
+				"SELECT DISTINCT user_id FROM {$table_name} WHERE course_id = %d AND user_id IN (" . implode( ',', array_fill( 0, count( $course_user_ids ), '%d' ) ) . ")",
+				array_merge( array( $course_id ), $course_user_ids )
+			)
+		);
+		$existing_ids = array_map( 'absint', (array) $existing_ids );
+		$missing_ids = array_values( array_diff( $course_user_ids, $existing_ids ) );
+
+		if ( ! empty( $missing_ids ) ) {
+			$expires_at = gmdate( 'Y-m-d H:i:s', time() + ( $days * DAY_IN_SECONDS ) );
+			foreach ( $missing_ids as $user_id ) {
+				$wpdb->insert(
+					$table_name,
+					array(
+						'user_id' => $user_id,
+						'course_id' => $course_id,
+						'granted_by' => get_current_user_id(),
+						'created_at' => $now,
+						'expires_at' => $expires_at,
+						'note' => __( 'Масове продовження доступу', 'smartlearn-lms' ),
+					),
+					array( '%d', '%d', '%d', '%s', '%s', '%s' )
+				);
+			}
+		}
 
 		wp_safe_redirect( add_query_arg( 'sl_notice', ( false === $updated ? 'error' : 'extended_all' ), $redirect ) );
 		exit;
@@ -381,6 +531,19 @@ class SmartLearn_LMS_Manual_Access {
 		);
 
 		$notice = isset( $_GET['sl_notice'] ) ? sanitize_key( wp_unslash( $_GET['sl_notice'] ) ) : '';
+		$selected_course_id = isset( $_GET['course_id'] ) ? absint( wp_unslash( $_GET['course_id'] ) ) : 0;
+		$selected_course_id = $selected_course_id ? $selected_course_id : 0;
+		$course_user_ids = $selected_course_id ? self::get_course_user_ids( $selected_course_id, true ) : array();
+		$course_users = ! empty( $course_user_ids )
+			? get_users(
+				array(
+					'include' => $course_user_ids,
+					'orderby' => 'display_name',
+					'order' => 'ASC',
+					'number' => 2000,
+				)
+			)
+			: array();
 		?>
 		<div class="wrap">
 			<h1><?php esc_html_e( 'Доступи', 'smartlearn-lms' ); ?></h1>
@@ -505,33 +668,106 @@ class SmartLearn_LMS_Manual_Access {
 
 			<?php if ( 'extend_all' === $ui_tab ) : ?>
 			<h2 style="margin-top:24px;"><?php esc_html_e( 'Продовжити всім користувачам', 'smartlearn-lms' ); ?></h2>
+			<form method="get" action="<?php echo esc_url( admin_url( 'edit.php' ) ); ?>" style="background:#fff;border:1px solid #ccd0d4;padding:16px;max-width:1000px;margin-bottom:16px;">
+				<input type="hidden" name="post_type" value="smartlearn_course">
+				<input type="hidden" name="page" value="smartlearn-lms-access">
+				<input type="hidden" name="ui_tab" value="extend_all">
+				<table class="form-table">
+					<tr>
+						<th><label for="course_id_select"><?php esc_html_e( 'Курс', 'smartlearn-lms' ); ?></label></th>
+						<td>
+							<select name="course_id" id="course_id_select" required style="min-width:320px;" onchange="this.form.submit();">
+								<option value=""><?php esc_html_e( '— Виберіть курс —', 'smartlearn-lms' ); ?></option>
+								<?php foreach ( $courses as $course ) : ?>
+									<option value="<?php echo esc_attr( $course->ID ); ?>" <?php selected( $selected_course_id, $course->ID ); ?>>
+										<?php echo esc_html( $course->post_title ); ?>
+									</option>
+								<?php endforeach; ?>
+							</select>
+						</td>
+					</tr>
+				</table>
+			</form>
+
 			<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" style="background:#fff;border:1px solid #ccd0d4;padding:16px;max-width:1000px;">
 				<?php wp_nonce_field( 'smartlearn_lms_extend_all_accesses' ); ?>
 				<input type="hidden" name="action" value="smartlearn_lms_extend_all_accesses">
+				<input type="hidden" name="course_id" value="<?php echo esc_attr( $selected_course_id ); ?>">
 				<table class="form-table">
 					<tr>
 						<th><label for="all_extend_days"><?php esc_html_e( 'Продовжити на (днів)', 'smartlearn-lms' ); ?></label></th>
 						<td>
 							<input type="number" min="1" step="1" id="all_extend_days" name="all_extend_days" value="5" class="small-text" required>
-							<p class="description"><?php esc_html_e( 'Подовжує всі строкові (не безстрокові) ручні доступи.', 'smartlearn-lms' ); ?></p>
+							<p class="description"><?php esc_html_e( 'Подовжує строкові доступи для всіх користувачів курсу.', 'smartlearn-lms' ); ?></p>
 						</td>
 					</tr>
 					<tr>
 						<th><label for="exclude_user_ids"><?php esc_html_e( 'Виключення (не продовжувати)', 'smartlearn-lms' ); ?></label></th>
 						<td>
-							<select id="exclude_user_ids" name="exclude_user_ids[]" multiple size="8" style="min-width:420px;max-width:100%;">
-								<?php foreach ( $users as $user ) : ?>
-									<option value="<?php echo esc_attr( $user->ID ); ?>">
-										<?php echo esc_html( $user->display_name . ' (' . $user->user_email . ')' ); ?>
-									</option>
-								<?php endforeach; ?>
-							</select>
-							<p class="description"><?php esc_html_e( 'Утримуйте Ctrl/Cmd для вибору кількох користувачів.', 'smartlearn-lms' ); ?></p>
+							<?php if ( ! $selected_course_id ) : ?>
+								<p class="description"><?php esc_html_e( 'Спочатку оберіть курс вище.', 'smartlearn-lms' ); ?></p>
+							<?php elseif ( empty( $course_users ) ) : ?>
+								<p class="description"><?php esc_html_e( 'Немає користувачів з доступом до цього курсу.', 'smartlearn-lms' ); ?></p>
+							<?php else : ?>
+								<div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
+									<div>
+										<div style="font-weight:600;margin-bottom:6px;"><?php esc_html_e( 'Користувачі курсу', 'smartlearn-lms' ); ?></div>
+										<select id="course_user_ids" multiple size="10" style="min-width:420px;max-width:100%;">
+											<?php foreach ( $course_users as $user ) : ?>
+												<option value="<?php echo esc_attr( $user->ID ); ?>">
+													<?php echo esc_html( $user->display_name . ' (' . $user->user_email . ')' ); ?>
+												</option>
+											<?php endforeach; ?>
+										</select>
+									</div>
+									<div style="display:flex;flex-direction:column;gap:8px;">
+										<button type="button" class="button" id="sl-exclude-add">+</button>
+										<button type="button" class="button" id="sl-exclude-remove">-</button>
+									</div>
+									<div>
+										<div style="font-weight:600;margin-bottom:6px;"><?php esc_html_e( 'Виключення', 'smartlearn-lms' ); ?></div>
+										<select id="exclude_user_ids" name="exclude_user_ids[]" multiple size="10" style="min-width:420px;max-width:100%;"></select>
+									</div>
+								</div>
+								<p class="description"><?php esc_html_e( 'Виберіть користувачів зліва і натисніть + щоб додати у виключення.', 'smartlearn-lms' ); ?></p>
+							<?php endif; ?>
 						</td>
 					</tr>
 				</table>
-				<?php submit_button( __( 'Продовжити всім', 'smartlearn-lms' ), 'secondary' ); ?>
+				<?php submit_button( __( 'Продовжити всім', 'smartlearn-lms' ), 'secondary', 'submit', true, $selected_course_id ? array() : array( 'disabled' => 'disabled' ) ); ?>
 			</form>
+			<script>
+			(function() {
+				var addBtn = document.getElementById('sl-exclude-add');
+				var removeBtn = document.getElementById('sl-exclude-remove');
+				var source = document.getElementById('course_user_ids');
+				var target = document.getElementById('exclude_user_ids');
+				if (!addBtn || !removeBtn || !source || !target) { return; }
+
+				function moveSelected(from, to) {
+					var selected = Array.prototype.slice.call(from.options).filter(function(opt) { return opt.selected; });
+					selected.forEach(function(opt) {
+						opt.selected = false;
+						to.appendChild(opt);
+					});
+				}
+
+				addBtn.addEventListener('click', function() {
+					moveSelected(source, target);
+				});
+
+				removeBtn.addEventListener('click', function() {
+					moveSelected(target, source);
+				});
+
+				var form = target.closest('form');
+				if (form) {
+					form.addEventListener('submit', function() {
+						Array.prototype.slice.call(target.options).forEach(function(opt) { opt.selected = true; });
+					});
+				}
+			})();
+			</script>
 			<?php endif; ?>
 
 			<?php if ( 'list' === $ui_tab ) : ?>

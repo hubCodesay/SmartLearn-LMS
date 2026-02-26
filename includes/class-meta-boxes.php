@@ -70,6 +70,12 @@ class SmartLearn_LMS_Meta_Boxes {
 		$product_id = get_post_meta( $post->ID, '_smartlearn_course_product_id', true );
 		$is_free = get_post_meta( $post->ID, '_smartlearn_course_is_free', true );
 		$instructor_name = get_post_meta( $post->ID, '_smartlearn_course_instructor_name', true );
+		$notify_on_start = get_post_meta( $post->ID, '_smartlearn_course_notify_on_start', true );
+		$start_ts = (int) get_post_meta( $post->ID, '_smartlearn_course_start_ts', true );
+		$start_value = $start_ts ? wp_date( 'Y-m-d\TH:i', $start_ts, wp_timezone() ) : '';
+		$start_sms = get_post_meta( $post->ID, '_smartlearn_course_start_sms', true );
+		$current_user = wp_get_current_user();
+		$test_email = ( $current_user instanceof WP_User ) ? $current_user->user_email : '';
 		
 		?>
 		<div class="-meta-box">
@@ -145,6 +151,65 @@ class SmartLearn_LMS_Meta_Boxes {
 					<?php esc_html_e( 'Якщо поле порожнє, автоматично використовується автор запису курсу.', 'smartlearn-lms' ); ?>
 				</p>
 			</p>
+
+			<hr style="margin:20px 0;">
+
+			<h3 style="margin:0 0 12px;"><?php esc_html_e( 'Сповіщення про початок курсу (SMS на email)', 'smartlearn-lms' ); ?></h3>
+			<p>
+				<label>
+					<input type="checkbox" name="smartlearn_course_notify_on_start" value="1" <?php checked( $notify_on_start, '1' ); ?> />
+					<?php esc_html_e( 'Сповістити користувачів про початок курсу/стріму', 'smartlearn-lms' ); ?>
+				</label>
+			</p>
+			<p>
+				<label for="smartlearn_course_start_at">
+					<strong><?php esc_html_e( 'Дата і час початку:', 'smartlearn-lms' ); ?></strong>
+				</label><br/>
+				<input type="datetime-local" name="smartlearn_course_start_at" id="smartlearn_course_start_at" value="<?php echo esc_attr( $start_value ); ?>" style="width:260px;">
+				<p class="description"><?php esc_html_e( 'Використовується час сайту (налаштування WordPress).', 'smartlearn-lms' ); ?></p>
+			</p>
+			<p>
+				<label for="smartlearn_course_start_sms">
+					<strong><?php esc_html_e( 'Текст SMS (на email):', 'smartlearn-lms' ); ?></strong>
+				</label><br/>
+				<textarea name="smartlearn_course_start_sms" id="smartlearn_course_start_sms" rows="5" style="width:100%;max-width:600px;"><?php echo esc_textarea( $start_sms ); ?></textarea>
+				<p class="description"><?php esc_html_e( 'Цей текст буде відправлено всім користувачам курсу.', 'smartlearn-lms' ); ?></p>
+			</p>
+			<p>
+				<label for="smartlearn_course_test_sms_email">
+					<strong><?php esc_html_e( 'Тестове відправлення (email):', 'smartlearn-lms' ); ?></strong>
+				</label><br/>
+				<input type="email" id="smartlearn_course_test_sms_email" value="<?php echo esc_attr( $test_email ); ?>" style="width:260px;">
+				<button type="button" class="button" id="smartlearn_course_test_sms_button"><?php esc_html_e( 'Надіслати тест', 'smartlearn-lms' ); ?></button>
+				<span id="smartlearn_course_test_sms_status" style="margin-left:8px;"></span>
+			</p>
+
+			<?php if ( class_exists( 'SmartLearn_LMS_Notifications' ) ) : ?>
+				<?php $logs = SmartLearn_LMS_Notifications::get_course_logs( $post->ID, 30 ); ?>
+				<?php if ( ! empty( $logs ) ) : ?>
+					<h4 style="margin:16px 0 8px;"><?php esc_html_e( 'Статус відправлень (останні 30)', 'smartlearn-lms' ); ?></h4>
+					<table class="widefat striped" style="max-width:900px;">
+						<thead>
+							<tr>
+								<th><?php esc_html_e( 'Email', 'smartlearn-lms' ); ?></th>
+								<th><?php esc_html_e( 'Статус', 'smartlearn-lms' ); ?></th>
+								<th><?php esc_html_e( 'Час', 'smartlearn-lms' ); ?></th>
+								<th><?php esc_html_e( 'Помилка', 'smartlearn-lms' ); ?></th>
+							</tr>
+						</thead>
+						<tbody>
+							<?php foreach ( $logs as $log ) : ?>
+								<tr>
+									<td><?php echo esc_html( $log->user_email ); ?></td>
+									<td><?php echo esc_html( $log->status ); ?></td>
+									<td><?php echo esc_html( $log->sent_at ); ?></td>
+									<td><?php echo esc_html( $log->error ); ?></td>
+								</tr>
+							<?php endforeach; ?>
+						</tbody>
+					</table>
+				<?php endif; ?>
+			<?php endif; ?>
 		</div>
 		
 		<script>
@@ -155,6 +220,29 @@ class SmartLearn_LMS_Meta_Boxes {
 				} else {
 					$('.course-product-field').show();
 				}
+			});
+
+			$('#smartlearn_course_test_sms_button').on('click', function() {
+				var $status = $('#smartlearn_course_test_sms_status');
+				var email = $('#smartlearn_course_test_sms_email').val();
+				var message = $('#smartlearn_course_start_sms').val();
+				$status.text('');
+				$.post(ajaxurl, {
+					action: 'smartlearn_lms_send_test_sms',
+					nonce: '<?php echo esc_js( wp_create_nonce( 'smartlearn_lms_send_test_sms' ) ); ?>',
+					course_id: '<?php echo esc_js( $post->ID ); ?>',
+					email: email,
+					message: message
+				}).done(function(resp) {
+					if (resp && resp.success) {
+						$status.css('color', '#0a7a00').text(resp.data.message);
+					} else {
+						var msg = (resp && resp.data && resp.data.message) ? resp.data.message : '<?php echo esc_js( __( 'Помилка.', 'smartlearn-lms' ) ); ?>';
+						$status.css('color', '#b32d2e').text(msg);
+					}
+				}).fail(function() {
+					$status.css('color', '#b32d2e').text('<?php echo esc_js( __( 'Помилка запиту.', 'smartlearn-lms' ) ); ?>');
+				});
 			});
 		});
 		</script>
@@ -299,6 +387,34 @@ class SmartLearn_LMS_Meta_Boxes {
 		// Save instructor name override
 		$instructor_name = isset( $_POST['smartlearn_course_instructor_name'] ) ? sanitize_text_field( $_POST['smartlearn_course_instructor_name'] ) : '';
 		update_post_meta( $post_id, '_smartlearn_course_instructor_name', $instructor_name );
+
+		// Save notifications settings
+		$notify_on_start = isset( $_POST['smartlearn_course_notify_on_start'] ) ? '1' : '';
+		update_post_meta( $post_id, '_smartlearn_course_notify_on_start', $notify_on_start );
+
+		$start_at_raw = isset( $_POST['smartlearn_course_start_at'] ) ? sanitize_text_field( $_POST['smartlearn_course_start_at'] ) : '';
+		$start_ts = 0;
+		$start_at = '';
+		if ( '' !== $start_at_raw ) {
+			$dt = date_create_from_format( 'Y-m-d\TH:i', $start_at_raw, wp_timezone() );
+			if ( $dt ) {
+				$start_ts = (int) $dt->getTimestamp();
+				$start_at = $dt->format( 'Y-m-d H:i:s' );
+			}
+		}
+		update_post_meta( $post_id, '_smartlearn_course_start_at', $start_at );
+		update_post_meta( $post_id, '_smartlearn_course_start_ts', $start_ts );
+
+		$start_sms = isset( $_POST['smartlearn_course_start_sms'] ) ? sanitize_textarea_field( $_POST['smartlearn_course_start_sms'] ) : '';
+		update_post_meta( $post_id, '_smartlearn_course_start_sms', $start_sms );
+
+		if ( class_exists( 'SmartLearn_LMS_Notifications' ) ) {
+			if ( '1' === $notify_on_start && $start_ts ) {
+				SmartLearn_LMS_Notifications::schedule_course_notification( $post_id, $start_ts );
+			} else {
+				SmartLearn_LMS_Notifications::schedule_course_notification( $post_id, 0 );
+			}
+		}
 	}
 	
 	/**
