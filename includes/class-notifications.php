@@ -14,6 +14,7 @@ class SmartLearn_LMS_Notifications {
 		add_action( 'admin_init', array( $this, 'maybe_create_table' ) );
 		add_action( 'smartlearn_lms_course_start_notify', array( $this, 'handle_course_start_notify' ), 10, 1 );
 		add_action( 'wp_ajax_smartlearn_lms_send_test_sms', array( $this, 'handle_send_test_sms' ) );
+		add_action( 'wp_ajax_smartlearn_lms_send_now_sms', array( $this, 'handle_send_now_sms' ) );
 	}
 
 	public static function get_table_name() {
@@ -77,7 +78,16 @@ class SmartLearn_LMS_Notifications {
 		}
 
 		$table_name = self::get_table_name();
-		$limit = max( 1, absint( $limit ) );
+		$limit = absint( $limit );
+		if ( 0 === $limit ) {
+			return $wpdb->get_results(
+				$wpdb->prepare(
+					"SELECT * FROM {$table_name} WHERE course_id = %d ORDER BY sent_at DESC, id DESC",
+					$course_id
+				)
+			);
+		}
+		$limit = max( 1, $limit );
 
 		return $wpdb->get_results(
 			$wpdb->prepare(
@@ -100,24 +110,32 @@ class SmartLearn_LMS_Notifications {
 		}
 
 		$message = (string) get_post_meta( $course_id, '_smartlearn_course_start_sms', true );
-		$message = trim( $message );
-		if ( '' === $message ) {
-			return;
-		}
-
 		$scheduled_ts = (int) get_post_meta( $course_id, '_smartlearn_course_start_ts', true );
 		$last_sent_ts = (int) get_post_meta( $course_id, '_smartlearn_course_last_sent_ts', true );
 		if ( $scheduled_ts && $last_sent_ts === $scheduled_ts ) {
 			return;
 		}
 
+		$sent = $this->send_course_sms_now( $course_id, $message );
+		if ( $sent && $scheduled_ts ) {
+			update_post_meta( $course_id, '_smartlearn_course_last_sent_ts', $scheduled_ts );
+		}
+	}
+
+	private function send_course_sms_now( $course_id, $message ) {
+		$course_id = absint( $course_id );
+		$message = trim( (string) $message );
+		if ( ! $course_id || '' === $message ) {
+			return false;
+		}
+
 		if ( ! class_exists( 'SmartLearn_LMS_Manual_Access' ) ) {
-			return;
+			return false;
 		}
 
 		$user_ids = SmartLearn_LMS_Manual_Access::get_course_user_ids( $course_id, true );
 		if ( empty( $user_ids ) ) {
-			return;
+			return false;
 		}
 
 		foreach ( $user_ids as $user_id ) {
@@ -132,9 +150,7 @@ class SmartLearn_LMS_Notifications {
 			$this->send_sms_email( $email, $message, $course_id, $user_id );
 		}
 
-		if ( $scheduled_ts ) {
-			update_post_meta( $course_id, '_smartlearn_course_last_sent_ts', $scheduled_ts );
-		}
+		return true;
 	}
 
 	private function send_sms_email( $email, $message, $course_id = 0, $user_id = 0 ) {
@@ -202,5 +218,27 @@ class SmartLearn_LMS_Notifications {
 		}
 
 		wp_send_json_success( array( 'message' => __( 'Тестове повідомлення відправлено.', 'smartlearn-lms' ) ) );
+	}
+
+	public function handle_send_now_sms() {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_send_json_error( array( 'message' => __( 'Недостатньо прав.', 'smartlearn-lms' ) ) );
+		}
+
+		check_ajax_referer( 'smartlearn_lms_send_now_sms', 'nonce' );
+
+		$course_id = isset( $_POST['course_id'] ) ? absint( $_POST['course_id'] ) : 0;
+		$message = isset( $_POST['message'] ) ? sanitize_textarea_field( wp_unslash( $_POST['message'] ) ) : '';
+
+		if ( ! $course_id || '' === $message ) {
+			wp_send_json_error( array( 'message' => __( 'Вкажіть текст повідомлення.', 'smartlearn-lms' ) ) );
+		}
+
+		$sent = $this->send_course_sms_now( $course_id, $message );
+		if ( ! $sent ) {
+			wp_send_json_error( array( 'message' => __( 'Немає користувачів для відправки.', 'smartlearn-lms' ) ) );
+		}
+
+		wp_send_json_success( array( 'message' => __( 'Повідомлення відправлено всім користувачам курсу.', 'smartlearn-lms' ) ) );
 	}
 }

@@ -76,6 +76,14 @@ class SmartLearn_LMS_Meta_Boxes {
 		$start_sms = get_post_meta( $post->ID, '_smartlearn_course_start_sms', true );
 		$current_user = wp_get_current_user();
 		$test_email = ( $current_user instanceof WP_User ) ? $current_user->user_email : '';
+		$now_ts = time();
+		$now_display = wp_date( 'Y-m-d H:i:s', $now_ts, wp_timezone() );
+		$start_in_past = $start_ts && $start_ts <= $now_ts;
+		$start_invalid = get_post_meta( $post->ID, '_smartlearn_course_start_invalid', true );
+		if ( $start_invalid ) {
+			delete_post_meta( $post->ID, '_smartlearn_course_start_invalid' );
+		}
+		$logs_all = isset( $_GET['sl_logs'] ) && 'all' === sanitize_key( wp_unslash( $_GET['sl_logs'] ) );
 		
 		?>
 		<div class="-meta-box">
@@ -166,7 +174,20 @@ class SmartLearn_LMS_Meta_Boxes {
 					<strong><?php esc_html_e( 'Дата і час початку:', 'smartlearn-lms' ); ?></strong>
 				</label><br/>
 				<input type="datetime-local" name="smartlearn_course_start_at" id="smartlearn_course_start_at" value="<?php echo esc_attr( $start_value ); ?>" style="width:260px;">
-				<p class="description"><?php esc_html_e( 'Використовується час сайту (налаштування WordPress).', 'smartlearn-lms' ); ?></p>
+				<p class="description">
+					<?php esc_html_e( 'Використовується час сайту (налаштування WordPress).', 'smartlearn-lms' ); ?>
+					<br/>
+					<?php echo esc_html( sprintf( __( 'Поточний час: %s', 'smartlearn-lms' ), $now_display ) ); ?>
+				</p>
+				<?php if ( $start_invalid ) : ?>
+					<p class="description" style="color:#b32d2e;">
+						<?php esc_html_e( 'Збережено некоректний час (у минулому). Вкажіть майбутню дату.', 'smartlearn-lms' ); ?>
+					</p>
+				<?php elseif ( $start_in_past ) : ?>
+					<p class="description" style="color:#b32d2e;">
+						<?php esc_html_e( 'Обраний час уже в минулому. Вкажіть майбутню дату.', 'smartlearn-lms' ); ?>
+					</p>
+				<?php endif; ?>
 			</p>
 			<p>
 				<label for="smartlearn_course_start_sms">
@@ -174,6 +195,10 @@ class SmartLearn_LMS_Meta_Boxes {
 				</label><br/>
 				<textarea name="smartlearn_course_start_sms" id="smartlearn_course_start_sms" rows="5" style="width:100%;max-width:600px;"><?php echo esc_textarea( $start_sms ); ?></textarea>
 				<p class="description"><?php esc_html_e( 'Цей текст буде відправлено всім користувачам курсу.', 'smartlearn-lms' ); ?></p>
+			</p>
+			<p>
+				<button type="button" class="button button-primary" id="smartlearn_course_send_now_sms_button"><?php esc_html_e( 'Надіслати всім зараз', 'smartlearn-lms' ); ?></button>
+				<span id="smartlearn_course_send_now_sms_status" style="margin-left:8px;"></span>
 			</p>
 			<p>
 				<label for="smartlearn_course_test_sms_email">
@@ -185,9 +210,16 @@ class SmartLearn_LMS_Meta_Boxes {
 			</p>
 
 			<?php if ( class_exists( 'SmartLearn_LMS_Notifications' ) ) : ?>
-				<?php $logs = SmartLearn_LMS_Notifications::get_course_logs( $post->ID, 30 ); ?>
+				<?php $logs = SmartLearn_LMS_Notifications::get_course_logs( $post->ID, $logs_all ? 0 : 30 ); ?>
 				<?php if ( ! empty( $logs ) ) : ?>
-					<h4 style="margin:16px 0 8px;"><?php esc_html_e( 'Статус відправлень (останні 30)', 'smartlearn-lms' ); ?></h4>
+					<h4 style="margin:16px 0 8px;"><?php echo esc_html( $logs_all ? __( 'Статус відправлень (всі)', 'smartlearn-lms' ) : __( 'Статус відправлень (останні 30)', 'smartlearn-lms' ) ); ?></h4>
+					<p style="margin:0 0 8px;">
+						<?php if ( $logs_all ) : ?>
+							<a href="<?php echo esc_url( remove_query_arg( 'sl_logs' ) ); ?>"><?php esc_html_e( 'Показати останні 30', 'smartlearn-lms' ); ?></a>
+						<?php else : ?>
+							<a href="<?php echo esc_url( add_query_arg( 'sl_logs', 'all' ) ); ?>"><?php esc_html_e( 'Показати всі логи', 'smartlearn-lms' ); ?></a>
+						<?php endif; ?>
+					</p>
 					<table class="widefat striped" style="max-width:900px;">
 						<thead>
 							<tr>
@@ -244,6 +276,38 @@ class SmartLearn_LMS_Meta_Boxes {
 					$status.css('color', '#b32d2e').text('<?php echo esc_js( __( 'Помилка запиту.', 'smartlearn-lms' ) ); ?>');
 				});
 			});
+
+			$('#smartlearn_course_send_now_sms_button').on('click', function() {
+				var $status = $('#smartlearn_course_send_now_sms_status');
+				var message = $('#smartlearn_course_start_sms').val();
+				$status.text('');
+				$.post(ajaxurl, {
+					action: 'smartlearn_lms_send_now_sms',
+					nonce: '<?php echo esc_js( wp_create_nonce( 'smartlearn_lms_send_now_sms' ) ); ?>',
+					course_id: '<?php echo esc_js( $post->ID ); ?>',
+					message: message
+				}).done(function(resp) {
+					if (resp && resp.success) {
+						$status.css('color', '#0a7a00').text(resp.data.message);
+					} else {
+						var msg = (resp && resp.data && resp.data.message) ? resp.data.message : '<?php echo esc_js( __( 'Помилка.', 'smartlearn-lms' ) ); ?>';
+						$status.css('color', '#b32d2e').text(msg);
+					}
+				}).fail(function() {
+					$status.css('color', '#b32d2e').text('<?php echo esc_js( __( 'Помилка запиту.', 'smartlearn-lms' ) ); ?>');
+				});
+			});
+
+			function pad2(n) { return (n < 10 ? '0' : '') + n; }
+			function toLocalDatetimeValue(date) {
+				return date.getFullYear() + '-' + pad2(date.getMonth() + 1) + '-' + pad2(date.getDate()) + 'T' + pad2(date.getHours()) + ':' + pad2(date.getMinutes());
+			}
+			var $startInput = $('#smartlearn_course_start_at');
+			if ($startInput.length) {
+				var now = new Date();
+				now.setMinutes(now.getMinutes() + 1);
+				$startInput.attr('min', toLocalDatetimeValue(now));
+			}
 		});
 		</script>
 		<?php
@@ -399,7 +463,14 @@ class SmartLearn_LMS_Meta_Boxes {
 			$dt = date_create_from_format( 'Y-m-d\TH:i', $start_at_raw, wp_timezone() );
 			if ( $dt ) {
 				$start_ts = (int) $dt->getTimestamp();
-				$start_at = $dt->format( 'Y-m-d H:i:s' );
+				if ( $start_ts <= time() ) {
+					$start_ts = 0;
+					$start_at = '';
+					update_post_meta( $post_id, '_smartlearn_course_start_invalid', '1' );
+				} else {
+					$start_at = $dt->format( 'Y-m-d H:i:s' );
+					update_post_meta( $post_id, '_smartlearn_course_start_invalid', '' );
+				}
 			}
 		}
 		update_post_meta( $post_id, '_smartlearn_course_start_at', $start_at );
