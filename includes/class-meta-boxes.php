@@ -242,6 +242,10 @@ class SmartLearn_LMS_Meta_Boxes {
 		$course_id = get_post_meta( $post->ID, '_smartlearn_lesson_course_id', true );
 		$is_free = get_post_meta( $post->ID, '_smartlearn_lesson_is_free', true );
 		$video_url = get_post_meta( $post->ID, '_smartlearn_lesson_video_url', true );
+		$youtube_protected = get_post_meta( $post->ID, '_smartlearn_lesson_youtube_protected', true );
+		$youtube_protected_enabled = ( '' === $youtube_protected || '1' === $youtube_protected );
+		$youtube_is_live_stream = get_post_meta( $post->ID, '_smartlearn_lesson_youtube_is_live_stream', true );
+		$youtube_live_chat_enabled = get_post_meta( $post->ID, '_smartlearn_lesson_youtube_live_chat_enabled', true );
 		
 		?>
 		<div class="-meta-box">
@@ -284,11 +288,41 @@ class SmartLearn_LMS_Meta_Boxes {
 					<strong><?php esc_html_e( 'Відео URL (YouTube, Vimeo):', 'smartlearn-lms' ); ?></strong>
 				</label><br/>
 				<input type="url" name="smartlearn_lesson_video_url" id="smartlearn_lesson_video_url" value="<?php echo esc_attr( $video_url ); ?>" style="width:100%;" placeholder="https://www.youtube.com/watch?v=..." />
-				<p class="description">
+				<span class="description" style="display:block;">
 					<?php esc_html_e( 'Опціонально: додайте посилання на відео з YouTube або Vimeo.', 'smartlearn-lms' ); ?>
-				</p>
+				</span>
 			</p>
-			
+
+			<p>
+				<label>
+					<input type="checkbox" name="smartlearn_lesson_youtube_protected" value="1" <?php checked( $youtube_protected_enabled ); ?> />
+					<?php esc_html_e( 'Увімкнути захист YouTube-плеєра (заборонити перехід у YouTube, доступні лише Play/Pause)', 'smartlearn-lms' ); ?>
+				</label>
+				<span class="description" style="display:block;">
+					<?php esc_html_e( 'Якщо вимкнено, YouTube-плеєр працює у звичайному режимі: можна взаємодіяти з iframe і переходити на YouTube.', 'smartlearn-lms' ); ?>
+				</span>
+			</p>
+
+			<p>
+				<label>
+					<input type="checkbox" name="smartlearn_lesson_youtube_is_live_stream" value="1" <?php checked( $youtube_is_live_stream, '1' ); ?> />
+					<?php esc_html_e( 'Це пряма трансляція (стрім)', 'smartlearn-lms' ); ?>
+				</label>
+				<span class="description" style="display:block;">
+					<?php esc_html_e( 'Для стріму чат буде розташовано праворуч від відео на десктопі.', 'smartlearn-lms' ); ?>
+				</span>
+			</p>
+
+			<p>
+				<label>
+					<input type="checkbox" name="smartlearn_lesson_youtube_live_chat_enabled" value="1" <?php checked( $youtube_live_chat_enabled, '1' ); ?> />
+					<?php esc_html_e( 'Показувати чат YouTube-трансляції під відео', 'smartlearn-lms' ); ?>
+				</label>
+				<span class="description" style="display:block;">
+					<?php esc_html_e( 'Працює для YouTube live-відео, якщо у відео доступний вбудований чат.', 'smartlearn-lms' ); ?>
+				</span>
+			</p>
+				
 			<p>
 				<label for="smartlearn_lesson_duration">
 					<strong><?php esc_html_e( 'Тривалість уроку:', 'smartlearn-lms' ); ?></strong>
@@ -408,6 +442,18 @@ class SmartLearn_LMS_Meta_Boxes {
 		// Save video URL
 		$video_url = isset( $_POST['smartlearn_lesson_video_url'] ) ? esc_url_raw( $_POST['smartlearn_lesson_video_url'] ) : '';
 		update_post_meta( $post_id, '_smartlearn_lesson_video_url', $video_url );
+
+		// Save YouTube protection toggle
+		$youtube_protected = isset( $_POST['smartlearn_lesson_youtube_protected'] ) ? '1' : '0';
+		update_post_meta( $post_id, '_smartlearn_lesson_youtube_protected', $youtube_protected );
+
+		// Save YouTube live chat toggle
+		$youtube_live_chat_enabled = isset( $_POST['smartlearn_lesson_youtube_live_chat_enabled'] ) ? '1' : '';
+		update_post_meta( $post_id, '_smartlearn_lesson_youtube_live_chat_enabled', $youtube_live_chat_enabled );
+
+		// Save YouTube live stream toggle
+		$youtube_is_live_stream = isset( $_POST['smartlearn_lesson_youtube_is_live_stream'] ) ? '1' : '';
+		update_post_meta( $post_id, '_smartlearn_lesson_youtube_is_live_stream', $youtube_is_live_stream );
 		
 		// Save duration
 		$duration = isset( $_POST['smartlearn_lesson_duration'] ) ? sanitize_text_field( $_POST['smartlearn_lesson_duration'] ) : '';
