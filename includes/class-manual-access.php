@@ -8,6 +8,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 class SmartLearn_LMS_Manual_Access {
+	const LIFETIME_EXPIRES_AT = '2099-12-31 23:59:59';
 
 	/**
 	 * DB table name.
@@ -37,6 +38,120 @@ class SmartLearn_LMS_Manual_Access {
 		$exists = $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $table_name ) );
 		if ( $exists !== $table_name ) {
 			self::create_table();
+		}
+		// Normalize legacy empty DATETIME values and keep one record per user/course.
+		$wpdb->query( $wpdb->prepare( "UPDATE {$table_name} SET expires_at = %s WHERE expires_at = ''", self::LIFETIME_EXPIRES_AT ) );
+		$this->deduplicate_user_course_rows();
+	}
+
+	/**
+	 * Notify user about access changes.
+	 *
+	 * @param int    $user_id
+	 * @param int    $course_id
+	 * @param string $event
+	 * @param string $expires_at
+	 * @return void
+	 */
+	private function notify_access_change( $user_id, $course_id, $event, $expires_at = '' ) {
+		$user_id = absint( $user_id );
+		$course_id = absint( $course_id );
+		if ( ! $user_id || ! $course_id ) {
+			return;
+		}
+
+		do_action( 'smartlearn_lms_access_changed', $user_id, $course_id, sanitize_key( $event ), (string) $expires_at );
+	}
+
+	/**
+	 * Encode debug payload for redirect URL.
+	 *
+	 * @param array $payload
+	 * @return string
+	 */
+	private static function encode_debug_payload( array $payload ) {
+		$json = wp_json_encode( $payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES );
+		if ( ! is_string( $json ) || '' === $json ) {
+			return '';
+		}
+		return rtrim( strtr( base64_encode( $json ), '+/', '-_' ), '=' );
+	}
+
+	/**
+	 * Decode debug payload from URL.
+	 *
+	 * @param string $encoded
+	 * @return array
+	 */
+	private static function decode_debug_payload( $encoded ) {
+		$encoded = sanitize_text_field( (string) $encoded );
+		if ( '' === $encoded ) {
+			return array();
+		}
+		$raw = base64_decode( strtr( $encoded, '-_', '+/' ), true );
+		if ( ! is_string( $raw ) || '' === $raw ) {
+			return array();
+		}
+		$data = json_decode( $raw, true );
+		return is_array( $data ) ? $data : array();
+	}
+
+	/**
+	 * Normalize lifetime/empty expiration value.
+	 *
+	 * @param string|null $expires_at
+	 * @return string
+	 */
+	private static function normalize_expires_at( $expires_at ) {
+		$expires_at = (string) $expires_at;
+		return '' === $expires_at ? self::LIFETIME_EXPIRES_AT : $expires_at;
+	}
+
+	/**
+	 * Get user-facing expiry label.
+	 *
+	 * @param string $expires_at
+	 * @return string
+	 */
+	private static function get_expiry_label( $expires_at ) {
+		$expires_at = self::normalize_expires_at( $expires_at );
+		if ( self::LIFETIME_EXPIRES_AT === $expires_at ) {
+			return __( 'безстроковий', 'smartlearn-lms' );
+		}
+		$ts = strtotime( $expires_at );
+		return $ts ? wp_date( 'Y-m-d H:i', $ts ) : $expires_at;
+	}
+
+	/**
+	 * Remove duplicate access rows, keeping newest one per user/course.
+	 *
+	 * @return void
+	 */
+	private function deduplicate_user_course_rows() {
+		global $wpdb;
+		$table_name = self::get_table_name();
+		$rows = $wpdb->get_results(
+			"SELECT user_id, course_id, MAX(id) AS keep_id
+			 FROM {$table_name}
+			 GROUP BY user_id, course_id
+			 HAVING COUNT(*) > 1"
+		);
+		if ( empty( $rows ) ) {
+			return;
+		}
+
+		foreach ( $rows as $row ) {
+			$wpdb->query(
+				$wpdb->prepare(
+					"DELETE FROM {$table_name}
+					 WHERE user_id = %d
+					   AND course_id = %d
+					   AND id <> %d",
+					absint( $row->user_id ),
+					absint( $row->course_id ),
+					absint( $row->keep_id )
+				)
+			);
 		}
 	}
 
@@ -88,10 +203,15 @@ class SmartLearn_LMS_Manual_Access {
 
 		// Manual access users.
 		$table_name = self::get_table_name();
+		$now = current_time( 'mysql' );
 		$manual_ids = $wpdb->get_col(
 			$wpdb->prepare(
-				"SELECT DISTINCT user_id FROM {$table_name} WHERE course_id = %d",
-				$course_id
+				"SELECT DISTINCT user_id FROM {$table_name}
+				 WHERE course_id = %d
+				   AND (expires_at IS NULL OR expires_at = %s OR expires_at >= %s)",
+				$course_id,
+				self::LIFETIME_EXPIRES_AT,
+				$now
 			)
 		);
 		if ( ! empty( $manual_ids ) ) {
@@ -193,15 +313,16 @@ class SmartLearn_LMS_Manual_Access {
 
 		$count = (int) $wpdb->get_var(
 			$wpdb->prepare(
-				"SELECT COUNT(*) FROM {$table_name}
-				WHERE user_id = %d
-				  AND course_id = %d
-				  AND (expires_at IS NULL OR expires_at >= %s)",
-				$user_id,
-				$course_id,
-				$now
-			)
-		);
+					"SELECT COUNT(*) FROM {$table_name}
+					WHERE user_id = %d
+					  AND course_id = %d
+					  AND (expires_at IS NULL OR expires_at = %s OR expires_at >= %s)",
+					$user_id,
+					$course_id,
+					self::LIFETIME_EXPIRES_AT,
+					$now
+				)
+			);
 
 		return $count > 0;
 	}
@@ -235,40 +356,159 @@ class SmartLearn_LMS_Manual_Access {
 		$note = isset( $_POST['note'] ) ? sanitize_textarea_field( wp_unslash( $_POST['note'] ) ) : '';
 		$expires_at_raw = isset( $_POST['expires_at'] ) ? sanitize_text_field( wp_unslash( $_POST['expires_at'] ) ) : '';
 		$is_lifetime = isset( $_POST['is_lifetime'] ) ? '1' : '';
-		$redirect = admin_url( 'edit.php?post_type=smartlearn_course&page=smartlearn-lms-access&ui_tab=extend_all' );
+		$redirect = admin_url( 'edit.php?post_type=smartlearn_course&page=smartlearn-lms-access&ui_tab=list&status=active' );
 
 		if ( ! $user_id || ! $course_id ) {
-			wp_safe_redirect( add_query_arg( 'sl_notice', 'invalid', $redirect ) );
+			$debug = self::encode_debug_payload(
+				array(
+					'step' => 'validate_ids',
+					'user_id' => $user_id,
+					'course_id' => $course_id,
+				)
+			);
+			wp_safe_redirect( add_query_arg( array( 'sl_notice' => 'invalid', 'sl_debug' => $debug ), $redirect ) );
 			exit;
 		}
 
-		$expires_at = null;
+		if ( ! get_user_by( 'id', $user_id ) || 'smartlearn_course' !== get_post_type( $course_id ) ) {
+			$debug = self::encode_debug_payload(
+				array(
+					'step' => 'validate_entities',
+					'user_exists' => (bool) get_user_by( 'id', $user_id ),
+					'course_type' => (string) get_post_type( $course_id ),
+					'user_id' => $user_id,
+					'course_id' => $course_id,
+				)
+			);
+			wp_safe_redirect( add_query_arg( array( 'sl_notice' => 'invalid', 'sl_debug' => $debug ), $redirect ) );
+			exit;
+		}
+
+		$expires_at = '';
 		if ( '1' !== $is_lifetime && ! empty( $expires_at_raw ) ) {
 			$dt = date_create_from_format( 'Y-m-d\TH:i', $expires_at_raw, wp_timezone() );
 			if ( ! $dt ) {
-				wp_safe_redirect( add_query_arg( 'sl_notice', 'invalid_date', $redirect ) );
+				$debug = self::encode_debug_payload(
+					array(
+						'step' => 'validate_date',
+						'expires_at_raw' => $expires_at_raw,
+					)
+				);
+				wp_safe_redirect( add_query_arg( array( 'sl_notice' => 'invalid_date', 'sl_debug' => $debug ), $redirect ) );
 				exit;
 			}
 			$expires_at = $dt->format( 'Y-m-d H:i:s' );
 		}
+		$expires_at = self::normalize_expires_at( $expires_at );
 
 		global $wpdb;
 		$table_name = self::get_table_name();
+		$now = current_time( 'mysql' );
 
-		$inserted = $wpdb->insert(
-			$table_name,
-			array(
-				'user_id' => $user_id,
-				'course_id' => $course_id,
-				'granted_by' => get_current_user_id(),
-				'created_at' => current_time( 'mysql' ),
-				'expires_at' => $expires_at,
-				'note' => $note,
-			),
-			array( '%d', '%d', '%d', '%s', '%s', '%s' )
+		$existing_id = (int) $wpdb->get_var(
+			$wpdb->prepare(
+				"SELECT id FROM {$table_name}
+				 WHERE user_id = %d AND course_id = %d
+				 ORDER BY id DESC
+				 LIMIT 1",
+				$user_id,
+				$course_id
+			)
 		);
 
-		wp_safe_redirect( add_query_arg( 'sl_notice', $inserted ? 'granted' : 'error', $redirect ) );
+		if ( $existing_id > 0 ) {
+			$current_expires_at = (string) $wpdb->get_var(
+				$wpdb->prepare(
+					"SELECT expires_at FROM {$table_name} WHERE id = %d",
+					$existing_id
+				)
+			);
+			$current_expires_at = self::normalize_expires_at( $current_expires_at );
+
+			// If same access already exists, do not duplicate and do not create a new row.
+			if ( $current_expires_at === $expires_at ) {
+				$this->deduplicate_user_course_rows();
+				wp_safe_redirect(
+					add_query_arg(
+						array(
+							'sl_notice' => 'already_has_access',
+							'sl_access_until' => rawurlencode( self::get_expiry_label( $current_expires_at ) ),
+						),
+						$redirect
+					)
+				);
+				exit;
+			}
+
+			$written = $wpdb->update(
+				$table_name,
+				array(
+					'granted_by' => get_current_user_id(),
+					'created_at' => $now,
+					'expires_at' => $expires_at,
+					'note' => $note,
+				),
+				array( 'id' => $existing_id ),
+				array( '%d', '%s', '%s', '%s' ),
+				array( '%d' )
+			);
+			$write_ok = ( false !== $written );
+
+			// Keep one row per user/course.
+			$wpdb->query(
+				$wpdb->prepare(
+					"DELETE FROM {$table_name}
+					 WHERE user_id = %d
+					   AND course_id = %d
+					   AND id <> %d",
+					$user_id,
+					$course_id,
+					$existing_id
+				)
+			);
+		} else {
+			$inserted = $wpdb->insert(
+				$table_name,
+				array(
+					'user_id' => $user_id,
+					'course_id' => $course_id,
+					'granted_by' => get_current_user_id(),
+					'created_at' => $now,
+					'expires_at' => $expires_at,
+					'note' => $note,
+				),
+				array( '%d', '%d', '%d', '%s', '%s', '%s' )
+			);
+			$write_ok = ( false !== $inserted );
+		}
+
+		$active_saved = false;
+		if ( $write_ok ) {
+			$active_saved = self::user_has_active_access( $user_id, $course_id );
+		}
+
+		if ( $active_saved ) {
+			$event = $existing_id > 0 ? 'extended' : 'granted';
+			$this->notify_access_change( $user_id, $course_id, $event, $expires_at );
+		}
+
+		if ( ! $active_saved ) {
+			$debug = self::encode_debug_payload(
+				array(
+					'step' => 'persist_access',
+					'user_id' => $user_id,
+					'course_id' => $course_id,
+					'expires_at' => $expires_at,
+					'existing_id' => $existing_id,
+					'write_ok' => $write_ok,
+					'wpdb_error' => (string) $wpdb->last_error,
+				)
+			);
+			wp_safe_redirect( add_query_arg( array( 'sl_notice' => 'error', 'sl_debug' => $debug ), $redirect ) );
+			exit;
+		}
+
+		wp_safe_redirect( add_query_arg( 'sl_notice', 'granted', $redirect ) );
 		exit;
 	}
 
@@ -318,6 +558,13 @@ class SmartLearn_LMS_Manual_Access {
 
 		global $wpdb;
 		$table_name = self::get_table_name();
+		$course_ids = $wpdb->get_col(
+			$wpdb->prepare(
+				"SELECT DISTINCT course_id FROM {$table_name} WHERE user_id = %d",
+				$user_id
+			)
+		);
+		$course_ids = array_map( 'absint', (array) $course_ids );
 
 		$where = array( 'user_id' => $user_id );
 		$where_format = array( '%d' );
@@ -326,8 +573,9 @@ class SmartLearn_LMS_Manual_Access {
 			$updated = $wpdb->query(
 				$wpdb->prepare(
 					"UPDATE {$table_name}
-					 SET expires_at = NULL
+					 SET expires_at = %s
 					 WHERE user_id = %d",
+					self::LIFETIME_EXPIRES_AT,
 					$user_id
 				)
 			);
@@ -366,6 +614,12 @@ class SmartLearn_LMS_Manual_Access {
 					$user_id
 				)
 			);
+		}
+
+		if ( false !== $updated && ! empty( $course_ids ) ) {
+			foreach ( $course_ids as $course_id ) {
+				$this->notify_access_change( $user_id, $course_id, 'extended', '' );
+			}
 		}
 
 		wp_safe_redirect( add_query_arg( 'sl_notice', ( false === $updated ? 'error' : 'extended' ), $redirect ) );
@@ -421,20 +675,22 @@ class SmartLearn_LMS_Manual_Access {
 			$placeholders = implode( ',', array_fill( 0, count( $chunk ), '%d' ) );
 			$params = array_merge(
 				array( $now, $now, $days, $course_id ),
-				$chunk
+				$chunk,
+				array( self::LIFETIME_EXPIRES_AT )
 			);
 
-			$sql = "UPDATE {$table_name}
-				SET expires_at = DATE_ADD(
-					CASE
-						WHEN expires_at IS NULL OR expires_at < %s THEN %s
-						ELSE expires_at
-					END,
-					INTERVAL %d DAY
-				)
-				WHERE course_id = %d
-				  AND user_id IN ({$placeholders})
-				  AND expires_at IS NOT NULL";
+				$sql = "UPDATE {$table_name}
+						SET expires_at = DATE_ADD(
+							CASE
+								WHEN expires_at IS NULL OR expires_at < %s THEN %s
+								ELSE expires_at
+							END,
+						INTERVAL %d DAY
+					)
+					WHERE course_id = %d
+					  AND user_id IN ({$placeholders})
+					  AND expires_at IS NOT NULL
+					  AND expires_at <> %s";
 
 			$updated += (int) $wpdb->query( $wpdb->prepare( $sql, $params ) );
 		}
@@ -466,6 +722,12 @@ class SmartLearn_LMS_Manual_Access {
 			}
 		}
 
+		if ( false !== $updated ) {
+			foreach ( $course_user_ids as $target_user_id ) {
+				$this->notify_access_change( $target_user_id, $course_id, 'extended', '' );
+			}
+		}
+
 		wp_safe_redirect( add_query_arg( 'sl_notice', ( false === $updated ? 'error' : 'extended_all' ), $redirect ) );
 		exit;
 	}
@@ -494,9 +756,9 @@ class SmartLearn_LMS_Manual_Access {
 
 		$where = '1=1';
 		if ( 'active' === $status ) {
-			$where .= $wpdb->prepare( ' AND (a.expires_at IS NULL OR a.expires_at >= %s)', $now );
+			$where .= $wpdb->prepare( " AND (a.expires_at IS NULL OR a.expires_at = %s OR a.expires_at >= %s)", self::LIFETIME_EXPIRES_AT, $now );
 		} elseif ( 'expired' === $status ) {
-			$where .= $wpdb->prepare( ' AND a.expires_at IS NOT NULL AND a.expires_at < %s', $now );
+			$where .= $wpdb->prepare( " AND a.expires_at IS NOT NULL AND a.expires_at <> %s AND a.expires_at < %s", self::LIFETIME_EXPIRES_AT, $now );
 		}
 		$rows = $wpdb->get_results(
 			"SELECT a.*,
@@ -531,6 +793,8 @@ class SmartLearn_LMS_Manual_Access {
 		);
 
 		$notice = isset( $_GET['sl_notice'] ) ? sanitize_key( wp_unslash( $_GET['sl_notice'] ) ) : '';
+		$debug_payload = isset( $_GET['sl_debug'] ) ? self::decode_debug_payload( wp_unslash( $_GET['sl_debug'] ) ) : array();
+		$debug_text = ! empty( $debug_payload ) ? wp_json_encode( $debug_payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT ) : '';
 		$selected_course_id = isset( $_GET['course_id'] ) ? absint( wp_unslash( $_GET['course_id'] ) ) : 0;
 		$selected_course_id = $selected_course_id ? $selected_course_id : 0;
 		$course_user_ids = $selected_course_id ? self::get_course_user_ids( $selected_course_id, true ) : array();
@@ -570,6 +834,19 @@ class SmartLearn_LMS_Manual_Access {
 				<div class="notice notice-success is-dismissible"><p><?php esc_html_e( 'Доступи користувача оновлено.', 'smartlearn-lms' ); ?></p></div>
 			<?php elseif ( 'extended_all' === $notice ) : ?>
 				<div class="notice notice-success is-dismissible"><p><?php esc_html_e( 'Доступи всіх користувачів оновлено.', 'smartlearn-lms' ); ?></p></div>
+			<?php elseif ( 'already_has_access' === $notice ) : ?>
+				<div class="notice notice-warning is-dismissible">
+					<p>
+						<?php
+						$access_until = isset( $_GET['sl_access_until'] ) ? sanitize_text_field( wp_unslash( $_GET['sl_access_until'] ) ) : '';
+						if ( '' !== $access_until ) {
+							echo esc_html( sprintf( __( 'У користувача вже є доступ до курсу (%s). Існуючий запис збережено без дублювання.', 'smartlearn-lms' ), $access_until ) );
+						} else {
+							esc_html_e( 'У користувача вже є доступ до курсу. Існуючий запис збережено без дублювання.', 'smartlearn-lms' );
+						}
+						?>
+					</p>
+				</div>
 			<?php elseif ( 'deleted' === $notice ) : ?>
 				<div class="notice notice-success is-dismissible"><p><?php esc_html_e( 'Доступ видалено.', 'smartlearn-lms' ); ?></p></div>
 			<?php elseif ( in_array( $notice, array( 'invalid', 'invalid_date', 'error' ), true ) ) : ?>
@@ -807,7 +1084,7 @@ class SmartLearn_LMS_Manual_Access {
 					<?php else : ?>
 						<?php foreach ( $rows as $row ) : ?>
 							<?php
-							$is_active = empty( $row->expires_at ) || $row->expires_at >= $now;
+							$is_active = empty( $row->expires_at ) || $row->expires_at === self::LIFETIME_EXPIRES_AT || $row->expires_at >= $now;
 							$delete_url = wp_nonce_url(
 								add_query_arg(
 									array(
@@ -826,7 +1103,7 @@ class SmartLearn_LMS_Manual_Access {
 								</td>
 								<td><?php echo esc_html( $row->course_title ? $row->course_title : ( '#' . absint( $row->course_id ) ) ); ?></td>
 								<td><?php echo esc_html( $row->created_at ); ?></td>
-								<td><?php echo esc_html( $row->expires_at ? $row->expires_at : __( 'Безстроково', 'smartlearn-lms' ) ); ?></td>
+								<td><?php echo esc_html( ( empty( $row->expires_at ) || $row->expires_at === self::LIFETIME_EXPIRES_AT ) ? __( 'Безстроково', 'smartlearn-lms' ) : $row->expires_at ); ?></td>
 								<td>
 									<?php if ( $is_active ) : ?>
 										<span style="color:#0a7a00;font-weight:600;"><?php esc_html_e( 'Активний', 'smartlearn-lms' ); ?></span>
@@ -847,6 +1124,17 @@ class SmartLearn_LMS_Manual_Access {
 				</tbody>
 			</table>
 			</div>
+			<?php endif; ?>
+
+			<?php if ( ! empty( $debug_text ) ) : ?>
+				<div style="margin-top:28px;">
+					<details style="background:#fff;border:1px solid #dcdcde;padding:10px 12px;">
+						<summary style="cursor:pointer;font-weight:600;">
+							<?php esc_html_e( 'Для розробника: технічний debug log (натисніть, щоб відкрити)', 'smartlearn-lms' ); ?>
+						</summary>
+						<pre style="white-space:pre-wrap;background:#f6f7f7;border:1px solid #dcdcde;padding:8px;max-height:260px;overflow:auto;margin-top:10px;"><?php echo esc_html( $debug_text ); ?></pre>
+					</details>
+				</div>
 			<?php endif; ?>
 		</div>
 		<?php

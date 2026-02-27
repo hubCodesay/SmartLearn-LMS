@@ -13,8 +13,78 @@ class SmartLearn_LMS_Notifications {
 	public function __construct() {
 		add_action( 'admin_init', array( $this, 'maybe_create_table' ) );
 		add_action( 'smartlearn_lms_course_start_notify', array( $this, 'handle_course_start_notify' ), 10, 1 );
+		add_action( 'smartlearn_lms_access_changed', array( $this, 'handle_access_changed' ), 10, 4 );
 		add_action( 'wp_ajax_smartlearn_lms_send_test_sms', array( $this, 'handle_send_test_sms' ) );
 		add_action( 'wp_ajax_smartlearn_lms_send_now_sms', array( $this, 'handle_send_now_sms' ) );
+	}
+
+	/**
+	 * Notify user when access is granted or extended.
+	 *
+	 * @param int    $user_id
+	 * @param int    $course_id
+	 * @param string $event
+	 * @param string $expires_at
+	 * @return void
+	 */
+	public function handle_access_changed( $user_id, $course_id, $event, $expires_at = '' ) {
+		$user_id = absint( $user_id );
+		$course_id = absint( $course_id );
+		$event = sanitize_key( (string) $event );
+		$expires_at = (string) $expires_at;
+
+		if ( ! $user_id || ! $course_id ) {
+			return;
+		}
+
+		$user = get_user_by( 'id', $user_id );
+		if ( ! ( $user instanceof WP_User ) ) {
+			return;
+		}
+
+		$email = sanitize_email( $user->user_email );
+		if ( '' === $email ) {
+			return;
+		}
+
+		$course_title = get_the_title( $course_id );
+		$course_title = $course_title ? $course_title : ( '#' . $course_id );
+		$course_url = get_permalink( $course_id );
+
+		if ( 'granted' === $event ) {
+			$message = sprintf(
+				/* translators: %s: course title */
+				__( 'Вам надано доступ до курсу "%s".', 'smartlearn-lms' ),
+				$course_title
+			);
+		} else {
+			$message = sprintf(
+				/* translators: %s: course title */
+				__( 'Ваш доступ до курсу "%s" продовжено.', 'smartlearn-lms' ),
+				$course_title
+			);
+		}
+
+		$is_lifetime = ( '' === $expires_at || '2099-12-31 23:59:59' === $expires_at );
+		if ( ! $is_lifetime ) {
+			$message .= "\n\n" . sprintf(
+				/* translators: %s: expiration datetime */
+				__( 'Доступ дійсний до: %s', 'smartlearn-lms' ),
+				$expires_at
+			);
+		} else {
+			$message .= "\n\n" . __( 'Доступ безстроковий.', 'smartlearn-lms' );
+		}
+
+		if ( $course_url ) {
+			$message .= "\n\n" . sprintf(
+				/* translators: %s: course URL */
+				__( 'Посилання на курс: %s', 'smartlearn-lms' ),
+				$course_url
+			);
+		}
+
+		$this->send_sms_email( $email, $message, $course_id, $user_id );
 	}
 
 	public static function get_table_name() {
