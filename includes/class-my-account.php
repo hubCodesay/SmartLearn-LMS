@@ -85,6 +85,7 @@ class SmartLearn_LMS_My_Account {
 		echo '<h2>' . esc_html__( 'Мої курси', 'smartlearn-lms' ) . '</h2>';
 		$this->render_courses_table( $active_courses, __( 'Активні курси', 'smartlearn-lms' ) );
 		$this->render_courses_table( $history_courses, __( 'Історія курсів', 'smartlearn-lms' ) );
+		$this->render_access_history_table( $this->get_access_history_rows( $user_id ) );
 		echo '</div>';
 	}
 
@@ -138,10 +139,41 @@ class SmartLearn_LMS_My_Account {
 			$status_label = ! empty( $course['is_active'] ) ? __( 'Доступний', 'smartlearn-lms' ) : __( 'Завершений', 'smartlearn-lms' );
 
 			echo '<tr>';
-			echo '<td><a href="' . esc_url( $course['permalink'] ) . '">' . esc_html( $course['title'] ) . '</a></td>';
+			if ( ! empty( $course['permalink'] ) ) {
+				echo '<td><a href="' . esc_url( $course['permalink'] ) . '">' . esc_html( $course['title'] ) . '</a></td>';
+			} else {
+				echo '<td>' . esc_html( $course['title'] ) . '</td>';
+			}
 			echo '<td>' . esc_html( $course['purchase_date'] ) . '</td>';
 			echo '<td>' . esc_html( $course['expires_date'] ) . '</td>';
 			echo '<td><span class="smartlearn-access-pill ' . esc_attr( $status_class ) . '">' . esc_html( $status_label ) . '</span></td>';
+			echo '</tr>';
+		}
+
+		echo '</tbody></table>';
+	}
+
+	private function render_access_history_table( $rows ) {
+		echo '<h3>' . esc_html__( 'Історія змін доступу', 'smartlearn-lms' ) . '</h3>';
+		if ( empty( $rows ) ) {
+			echo '<p>' . esc_html__( 'Змін доступу поки немає.', 'smartlearn-lms' ) . '</p>';
+			return;
+		}
+
+		echo '<table class="smartlearn-my-courses-table">';
+		echo '<thead><tr>';
+		echo '<th>' . esc_html__( 'Дата', 'smartlearn-lms' ) . '</th>';
+		echo '<th>' . esc_html__( 'Курс', 'smartlearn-lms' ) . '</th>';
+		echo '<th>' . esc_html__( 'Подія', 'smartlearn-lms' ) . '</th>';
+		echo '<th>' . esc_html__( 'Дійсний до', 'smartlearn-lms' ) . '</th>';
+		echo '</tr></thead><tbody>';
+
+		foreach ( $rows as $row ) {
+			echo '<tr>';
+			echo '<td>' . esc_html( $this->format_datetime( $row['created_at'] ) ) . '</td>';
+			echo '<td>' . esc_html( $row['course_title'] ) . '</td>';
+			echo '<td>' . esc_html( $row['event_label'] ) . '</td>';
+			echo '<td>' . esc_html( $this->format_expires( $row['expires_at'] ) ) . '</td>';
 			echo '</tr>';
 		}
 
@@ -156,19 +188,23 @@ class SmartLearn_LMS_My_Account {
 
 		$manual_courses = $this->get_manual_courses_map( $user_id );
 		$purchased_courses = $this->get_purchased_courses_map( $user_id );
-		$all_course_ids = array_unique( array_merge( array_keys( $manual_courses ), array_keys( $purchased_courses ) ) );
+		$history_courses = $this->get_history_courses_map( $user_id );
+		$all_course_ids = array_unique( array_merge( array_keys( $manual_courses ), array_keys( $purchased_courses ), array_keys( $history_courses ) ) );
 		$all_course_ids = array_map( 'absint', $all_course_ids );
 
 		$rows = array();
 		foreach ( $all_course_ids as $course_id ) {
-			if ( 'smartlearn_course' !== get_post_type( $course_id ) ) {
-				continue;
+			$has_course_post = ( 'smartlearn_course' === get_post_type( $course_id ) );
+			$title = $has_course_post ? get_the_title( $course_id ) : '';
+			$permalink = $has_course_post ? get_permalink( $course_id ) : '';
+			if ( ! $title && ! empty( $history_courses[ $course_id ]['course_title'] ) ) {
+				$title = $history_courses[ $course_id ]['course_title'];
 			}
-
-			$title = get_the_title( $course_id );
-			$permalink = get_permalink( $course_id );
-			if ( ! $title || ! $permalink ) {
-				continue;
+			if ( ! $title ) {
+				$title = '#' . $course_id;
+			}
+			if ( ! $has_course_post ) {
+				$permalink = '';
 			}
 
 			$manual = isset( $manual_courses[ $course_id ] ) ? $manual_courses[ $course_id ] : array();
@@ -177,10 +213,15 @@ class SmartLearn_LMS_My_Account {
 				$purchase_date_raw = $purchased_courses[ $course_id ]['purchase_date_raw'];
 			} elseif ( isset( $manual['purchase_date_raw'] ) ) {
 				$purchase_date_raw = $manual['purchase_date_raw'];
+			} elseif ( isset( $history_courses[ $course_id ]['purchase_date_raw'] ) ) {
+				$purchase_date_raw = $history_courses[ $course_id ]['purchase_date_raw'];
 			}
 
 			$expires_raw = isset( $manual['expires_raw'] ) ? $manual['expires_raw'] : self::LIFETIME_EXPIRES_AT;
-			$is_active = SmartLearn_LMS_Access_Control::user_has_course_access( $course_id, $user_id );
+			if ( ! isset( $manual['expires_raw'] ) && isset( $history_courses[ $course_id ]['expires_raw'] ) ) {
+				$expires_raw = $history_courses[ $course_id ]['expires_raw'];
+			}
+			$is_active = $has_course_post ? SmartLearn_LMS_Access_Control::user_has_course_access( $course_id, $user_id ) : false;
 
 			$rows[] = array(
 				'course_id' => $course_id,
@@ -190,6 +231,72 @@ class SmartLearn_LMS_My_Account {
 				'purchase_date' => $this->format_datetime( $purchase_date_raw ),
 				'expires_date' => $this->format_expires( $expires_raw ),
 				'is_active' => $is_active,
+			);
+		}
+
+		return $rows;
+	}
+
+	private function get_history_courses_map( $user_id ) {
+		if ( ! class_exists( 'SmartLearn_LMS_Manual_Access' ) ) {
+			return array();
+		}
+
+		$rows = SmartLearn_LMS_Manual_Access::get_access_history(
+			array(
+				'user_id' => $user_id,
+				'limit' => 500,
+			)
+		);
+
+		$map = array();
+		foreach ( (array) $rows as $row ) {
+			$course_id = absint( $row->course_id );
+			if ( ! $course_id || isset( $map[ $course_id ] ) ) {
+				continue;
+			}
+			$expires_raw = (string) $row->expires_at;
+			if ( '' === $expires_raw ) {
+				$expires_raw = self::LIFETIME_EXPIRES_AT;
+			}
+			$map[ $course_id ] = array(
+				'course_title' => (string) $row->course_title,
+				'purchase_date_raw' => (string) $row->created_at,
+				'expires_raw' => $expires_raw,
+			);
+		}
+
+		return $map;
+	}
+
+	private function get_access_history_rows( $user_id ) {
+		if ( ! class_exists( 'SmartLearn_LMS_Manual_Access' ) ) {
+			return array();
+		}
+
+		$raw_rows = SmartLearn_LMS_Manual_Access::get_access_history(
+			array(
+				'user_id' => $user_id,
+				'limit' => 100,
+			)
+		);
+
+		$rows = array();
+		foreach ( (array) $raw_rows as $row ) {
+			$label = __( 'Оновлено', 'smartlearn-lms' );
+			if ( 'granted' === $row->action ) {
+				$label = __( 'Надано доступ', 'smartlearn-lms' );
+			} elseif ( 'extended' === $row->action ) {
+				$label = __( 'Продовжено доступ', 'smartlearn-lms' );
+			} elseif ( 'revoked' === $row->action ) {
+				$label = __( 'Видалено доступ', 'smartlearn-lms' );
+			}
+
+			$rows[] = array(
+				'created_at' => (string) $row->created_at,
+				'course_title' => '' !== (string) $row->course_title ? (string) $row->course_title : ( '#' . absint( $row->course_id ) ),
+				'event_label' => $label,
+				'expires_at' => (string) $row->expires_at,
 			);
 		}
 

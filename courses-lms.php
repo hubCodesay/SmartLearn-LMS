@@ -113,6 +113,7 @@ class SmartLearn_Courses_LMS {
 		$post_types = new SmartLearn_LMS_Post_Types();
 		$post_types->register_post_types();
 		SmartLearn_LMS_Manual_Access::create_table();
+		SmartLearn_LMS_Manual_Access::create_history_table();
 		if ( class_exists( 'SmartLearn_LMS_Notifications' ) ) {
 			SmartLearn_LMS_Notifications::create_table();
 		}

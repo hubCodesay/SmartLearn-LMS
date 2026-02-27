@@ -20,6 +20,16 @@ class SmartLearn_LMS_Manual_Access {
 		return $wpdb->prefix . 'smartlearn_lms_manual_access';
 	}
 
+	/**
+	 * History table name.
+	 *
+	 * @return string
+	 */
+	public static function get_history_table_name() {
+		global $wpdb;
+		return $wpdb->prefix . 'smartlearn_lms_access_history';
+	}
+
 	public function __construct() {
 		add_action( 'admin_menu', array( $this, 'add_admin_page' ) );
 		add_action( 'admin_init', array( $this, 'maybe_create_table' ) );
@@ -39,9 +49,63 @@ class SmartLearn_LMS_Manual_Access {
 		if ( $exists !== $table_name ) {
 			self::create_table();
 		}
+		$history_table = self::get_history_table_name();
+		$history_exists = $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $history_table ) );
+		if ( $history_exists !== $history_table ) {
+			self::create_history_table();
+		}
 		// Normalize legacy empty DATETIME values and keep one record per user/course.
 		$wpdb->query( $wpdb->prepare( "UPDATE {$table_name} SET expires_at = %s WHERE expires_at = ''", self::LIFETIME_EXPIRES_AT ) );
 		$this->deduplicate_user_course_rows();
+	}
+
+	/**
+	 * Save access change to immutable history.
+	 *
+	 * @param int    $user_id
+	 * @param int    $course_id
+	 * @param string $action
+	 * @param string $expires_at
+	 * @param string $note
+	 * @return void
+	 */
+	private function log_access_history( $user_id, $course_id, $action, $expires_at = '', $note = '' ) {
+		global $wpdb;
+
+		$user_id = absint( $user_id );
+		$course_id = absint( $course_id );
+		$changed_by = get_current_user_id();
+		if ( ! $user_id || ! $course_id ) {
+			return;
+		}
+
+		$user = get_user_by( 'id', $user_id );
+		$actor = get_user_by( 'id', $changed_by );
+		$course = get_post( $course_id );
+		$course_title = '';
+		if ( $course && 'smartlearn_course' === $course->post_type ) {
+			$course_title = (string) get_the_title( $course_id );
+		}
+
+		$expires_at = self::normalize_expires_at( $expires_at );
+
+		$wpdb->insert(
+			self::get_history_table_name(),
+			array(
+				'user_id' => $user_id,
+				'user_name' => $user ? (string) $user->display_name : '',
+				'user_email' => $user ? (string) $user->user_email : '',
+				'course_id' => $course_id,
+				'course_title' => $course_title,
+				'action' => sanitize_key( $action ),
+				'expires_at' => $expires_at,
+				'note' => (string) $note,
+				'changed_by' => absint( $changed_by ),
+				'changed_by_name' => $actor ? (string) $actor->display_name : '',
+				'created_at' => current_time( 'mysql' ),
+			),
+			array( '%d', '%s', '%s', '%d', '%s', '%s', '%s', '%s', '%d', '%s', '%s' )
+		);
 	}
 
 	/**
@@ -123,6 +187,32 @@ class SmartLearn_LMS_Manual_Access {
 	}
 
 	/**
+	 * Get latest expiry value for user/course pair.
+	 *
+	 * @param int $user_id
+	 * @param int $course_id
+	 * @return string
+	 */
+	private function get_user_course_expires_at( $user_id, $course_id ) {
+		global $wpdb;
+
+		$expires_at = $wpdb->get_var(
+			$wpdb->prepare(
+				"SELECT expires_at
+				 FROM " . self::get_table_name() . "
+				 WHERE user_id = %d
+				   AND course_id = %d
+				 ORDER BY id DESC
+				 LIMIT 1",
+				absint( $user_id ),
+				absint( $course_id )
+			)
+		);
+
+		return self::normalize_expires_at( $expires_at );
+	}
+
+	/**
 	 * Remove duplicate access rows, keeping newest one per user/course.
 	 *
 	 * @return void
@@ -182,6 +272,85 @@ class SmartLearn_LMS_Manual_Access {
 		) {$charset_collate};";
 
 		dbDelta( $sql );
+	}
+
+	/**
+	 * Create / update immutable history table.
+	 *
+	 * @return void
+	 */
+	public static function create_history_table() {
+		global $wpdb;
+
+		$table_name = self::get_history_table_name();
+		$charset_collate = $wpdb->get_charset_collate();
+
+		require_once ABSPATH . 'wp-admin/includes/upgrade.php';
+
+		$sql = "CREATE TABLE {$table_name} (
+			id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+			user_id bigint(20) unsigned NOT NULL,
+			user_name varchar(191) NOT NULL DEFAULT '',
+			user_email varchar(191) NOT NULL DEFAULT '',
+			course_id bigint(20) unsigned NOT NULL,
+			course_title varchar(255) NOT NULL DEFAULT '',
+			action varchar(32) NOT NULL DEFAULT '',
+			expires_at datetime NULL,
+			note text NULL,
+			changed_by bigint(20) unsigned NOT NULL DEFAULT 0,
+			changed_by_name varchar(191) NOT NULL DEFAULT '',
+			created_at datetime NOT NULL,
+			PRIMARY KEY  (id),
+			KEY user_id (user_id),
+			KEY course_id (course_id),
+			KEY action (action),
+			KEY created_at (created_at)
+		) {$charset_collate};";
+
+		dbDelta( $sql );
+	}
+
+	/**
+	 * Read access history rows.
+	 *
+	 * @param array $args
+	 * @return array
+	 */
+	public static function get_access_history( $args = array() ) {
+		global $wpdb;
+
+		$args = wp_parse_args(
+			$args,
+			array(
+				'user_id' => 0,
+				'course_id' => 0,
+				'limit' => 200,
+			)
+		);
+
+		$table_name = self::get_history_table_name();
+		$exists = $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $table_name ) );
+		if ( $exists !== $table_name ) {
+			return array();
+		}
+		$where = array( '1=1' );
+		$params = array();
+
+		if ( ! empty( $args['user_id'] ) ) {
+			$where[] = 'user_id = %d';
+			$params[] = absint( $args['user_id'] );
+		}
+
+		if ( ! empty( $args['course_id'] ) ) {
+			$where[] = 'course_id = %d';
+			$params[] = absint( $args['course_id'] );
+		}
+
+		$limit = max( 1, min( 1000, absint( $args['limit'] ) ) );
+		$sql = "SELECT * FROM {$table_name} WHERE " . implode( ' AND ', $where ) . ' ORDER BY created_at DESC, id DESC LIMIT %d';
+		$params[] = $limit;
+
+		return $wpdb->get_results( $wpdb->prepare( $sql, $params ) );
 	}
 
 	/**
@@ -490,6 +659,7 @@ class SmartLearn_LMS_Manual_Access {
 		if ( $active_saved ) {
 			$event = $existing_id > 0 ? 'extended' : 'granted';
 			$this->notify_access_change( $user_id, $course_id, $event, $expires_at );
+			$this->log_access_history( $user_id, $course_id, $event, $expires_at, $note );
 		}
 
 		if ( ! $active_saved ) {
@@ -530,7 +700,18 @@ class SmartLearn_LMS_Manual_Access {
 		}
 
 		global $wpdb;
-		$deleted = $wpdb->delete( self::get_table_name(), array( 'id' => $id ), array( '%d' ) );
+		$table_name = self::get_table_name();
+		$row = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM {$table_name} WHERE id = %d", $id ) );
+		$deleted = $wpdb->delete( $table_name, array( 'id' => $id ), array( '%d' ) );
+		if ( $deleted && $row ) {
+			$this->log_access_history(
+				absint( $row->user_id ),
+				absint( $row->course_id ),
+				'revoked',
+				(string) $row->expires_at,
+				(string) $row->note
+			);
+		}
 		wp_safe_redirect( add_query_arg( 'sl_notice', $deleted ? 'deleted' : 'error', $redirect ) );
 		exit;
 	}
@@ -619,6 +800,7 @@ class SmartLearn_LMS_Manual_Access {
 		if ( false !== $updated && ! empty( $course_ids ) ) {
 			foreach ( $course_ids as $course_id ) {
 				$this->notify_access_change( $user_id, $course_id, 'extended', '' );
+				$this->log_access_history( $user_id, $course_id, 'extended', $this->get_user_course_expires_at( $user_id, $course_id ), __( 'Масове продовження користувача', 'smartlearn-lms' ) );
 			}
 		}
 
@@ -703,11 +885,12 @@ class SmartLearn_LMS_Manual_Access {
 		);
 		$existing_ids = array_map( 'absint', (array) $existing_ids );
 		$missing_ids = array_values( array_diff( $course_user_ids, $existing_ids ) );
+		$inserted_ids = array();
 
 		if ( ! empty( $missing_ids ) ) {
 			$expires_at = gmdate( 'Y-m-d H:i:s', time() + ( $days * DAY_IN_SECONDS ) );
 			foreach ( $missing_ids as $user_id ) {
-				$wpdb->insert(
+				$inserted = $wpdb->insert(
 					$table_name,
 					array(
 						'user_id' => $user_id,
@@ -719,12 +902,17 @@ class SmartLearn_LMS_Manual_Access {
 					),
 					array( '%d', '%d', '%d', '%s', '%s', '%s' )
 				);
+				if ( false !== $inserted ) {
+					$inserted_ids[] = $user_id;
+				}
 			}
 		}
 
 		if ( false !== $updated ) {
 			foreach ( $course_user_ids as $target_user_id ) {
-				$this->notify_access_change( $target_user_id, $course_id, 'extended', '' );
+				$event = in_array( $target_user_id, $inserted_ids, true ) ? 'granted' : 'extended';
+				$this->notify_access_change( $target_user_id, $course_id, $event, '' );
+				$this->log_access_history( $target_user_id, $course_id, $event, $this->get_user_course_expires_at( $target_user_id, $course_id ), __( 'Масове продовження доступу', 'smartlearn-lms' ) );
 			}
 		}
 
@@ -741,7 +929,7 @@ class SmartLearn_LMS_Manual_Access {
 		}
 
 		$ui_tab = isset( $_GET['ui_tab'] ) ? sanitize_key( wp_unslash( $_GET['ui_tab'] ) ) : 'list';
-		if ( ! in_array( $ui_tab, array( 'add', 'extend_user', 'extend_all', 'list' ), true ) ) {
+		if ( ! in_array( $ui_tab, array( 'add', 'extend_user', 'extend_all', 'list', 'history' ), true ) ) {
 			$ui_tab = 'list';
 		}
 
@@ -773,6 +961,11 @@ class SmartLearn_LMS_Manual_Access {
 			 WHERE {$where}
 			 ORDER BY a.created_at DESC
 			 LIMIT 500"
+		);
+		$history_rows = self::get_access_history(
+			array(
+				'limit' => 500,
+			)
 		);
 
 		$courses = get_posts(
@@ -825,6 +1018,9 @@ class SmartLearn_LMS_Manual_Access {
 				</a>
 				<a class="nav-tab <?php echo 'list' === $ui_tab ? 'nav-tab-active' : ''; ?>" href="<?php echo esc_url( add_query_arg( array( 'post_type' => 'smartlearn_course', 'page' => 'smartlearn-lms-access', 'ui_tab' => 'list', 'status' => $status ), admin_url( 'edit.php' ) ) ); ?>">
 					<?php esc_html_e( 'Список', 'smartlearn-lms' ); ?>
+				</a>
+				<a class="nav-tab <?php echo 'history' === $ui_tab ? 'nav-tab-active' : ''; ?>" href="<?php echo esc_url( add_query_arg( array( 'post_type' => 'smartlearn_course', 'page' => 'smartlearn-lms-access', 'ui_tab' => 'history' ), admin_url( 'edit.php' ) ) ); ?>">
+					<?php esc_html_e( 'Історія змін', 'smartlearn-lms' ); ?>
 				</a>
 			</h2>
 
@@ -1117,6 +1313,59 @@ class SmartLearn_LMS_Manual_Access {
 							<?php if ( ! empty( $row->note ) ) : ?>
 								<tr>
 									<td colspan="7"><em><?php echo esc_html( $row->note ); ?></em></td>
+								</tr>
+							<?php endif; ?>
+						<?php endforeach; ?>
+					<?php endif; ?>
+				</tbody>
+			</table>
+			</div>
+			<?php endif; ?>
+
+			<?php if ( 'history' === $ui_tab ) : ?>
+			<div style="margin-top:24px;">
+			<table class="widefat striped" style="margin-top:12px;">
+				<thead>
+					<tr>
+						<th><?php esc_html_e( 'Дата', 'smartlearn-lms' ); ?></th>
+						<th><?php esc_html_e( 'Користувач', 'smartlearn-lms' ); ?></th>
+						<th><?php esc_html_e( 'Курс', 'smartlearn-lms' ); ?></th>
+						<th><?php esc_html_e( 'Подія', 'smartlearn-lms' ); ?></th>
+						<th><?php esc_html_e( 'Дійсний до', 'smartlearn-lms' ); ?></th>
+						<th><?php esc_html_e( 'Адмін', 'smartlearn-lms' ); ?></th>
+					</tr>
+				</thead>
+				<tbody>
+					<?php if ( empty( $history_rows ) ) : ?>
+						<tr><td colspan="6"><?php esc_html_e( 'Записів немає.', 'smartlearn-lms' ); ?></td></tr>
+					<?php else : ?>
+						<?php foreach ( $history_rows as $history_row ) : ?>
+							<?php
+							$event_label = __( 'Оновлено', 'smartlearn-lms' );
+							if ( 'granted' === $history_row->action ) {
+								$event_label = __( 'Надано доступ', 'smartlearn-lms' );
+							} elseif ( 'extended' === $history_row->action ) {
+								$event_label = __( 'Продовжено доступ', 'smartlearn-lms' );
+							} elseif ( 'revoked' === $history_row->action ) {
+								$event_label = __( 'Видалено доступ', 'smartlearn-lms' );
+							}
+							$course_label = $history_row->course_title ? $history_row->course_title : ( '#' . absint( $history_row->course_id ) );
+							$user_label = $history_row->user_name ? $history_row->user_name : ( '#' . absint( $history_row->user_id ) );
+							?>
+							<tr>
+								<td><?php echo esc_html( $history_row->created_at ); ?></td>
+								<td>
+									<strong><?php echo esc_html( $user_label ); ?></strong><br>
+									<small><?php echo esc_html( $history_row->user_email ); ?></small>
+								</td>
+								<td><?php echo esc_html( $course_label ); ?></td>
+								<td><?php echo esc_html( $event_label ); ?></td>
+								<td><?php echo esc_html( ( empty( $history_row->expires_at ) || $history_row->expires_at === self::LIFETIME_EXPIRES_AT ) ? __( 'Безстроково', 'smartlearn-lms' ) : $history_row->expires_at ); ?></td>
+								<td><?php echo esc_html( $history_row->changed_by_name ? $history_row->changed_by_name : ( '#' . absint( $history_row->changed_by ) ) ); ?></td>
+							</tr>
+							<?php if ( ! empty( $history_row->note ) ) : ?>
+								<tr>
+									<td colspan="6"><em><?php echo esc_html( $history_row->note ); ?></em></td>
 								</tr>
 							<?php endif; ?>
 						<?php endforeach; ?>
