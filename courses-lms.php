@@ -93,6 +93,7 @@ class SmartLearn_Courses_LMS {
 		require_once SMARTLEARN_LMS_PATH . 'includes/class-access-control.php';
 		require_once SMARTLEARN_LMS_PATH . 'includes/class-templates.php';
 		require_once SMARTLEARN_LMS_PATH . 'includes/class-shortcodes.php';
+		require_once SMARTLEARN_LMS_PATH . 'includes/class-my-account.php';
 		require_once SMARTLEARN_LMS_PATH . 'includes/class-settings.php';
 		
 		// Initialize components
@@ -103,6 +104,7 @@ class SmartLearn_Courses_LMS {
 		// Access_Control має тільки статичні методи - не потрібно ініціалізувати
 		new SmartLearn_LMS_Templates();
 		new SmartLearn_LMS_Shortcodes();
+		new SmartLearn_LMS_My_Account();
 		new SmartLearn_LMS_Settings();
 	}
 	
