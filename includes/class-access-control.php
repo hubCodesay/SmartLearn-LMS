@@ -52,9 +52,50 @@ class SmartLearn_LMS_Access_Control {
 			// Якщо товар не прив'язаний і курс не безкоштовний - забороняємо доступ
 			return false;
 		}
-		
-		// Перевірити чи користувач купив товар
-		return self::user_has_bought_product( $user_id, $product_id );
+
+		// Перевірити чи користувач купив товар (через WooCommerce)
+		if ( function_exists( 'wc_customer_bought_product' ) && wc_customer_bought_product( get_userdata( $user_id )->user_email, $user_id, $product_id ) ) {
+			// Якщо є активний ручний доступ — вже повернули true вище.
+			// Спробуємо створити ручний запис доступу для покупок без наявного запису (міграція старих покупок).
+			if ( class_exists( 'SmartLearn_LMS_Manual_Access' ) && ! SmartLearn_LMS_Manual_Access::user_has_active_access( $user_id, $course_id ) ) {
+				// Спробувати знайти останнє замовлення користувача з цим товаром
+				if ( function_exists( 'wc_get_orders' ) ) {
+					$orders = wc_get_orders( array(
+						'customer' => $user_id,
+						'limit' => 10,
+						'status' => array( 'completed', 'processing', 'on-hold' ),
+					) );
+					foreach ( $orders as $order ) {
+						foreach ( $order->get_items() as $item ) {
+							if ( $item->get_product_id() == $product_id ) {
+								$purchase_ts = $order->get_date_created() ? $order->get_date_created()->getTimestamp() : current_time( 'timestamp' );
+								$duration_raw = get_post_meta( $course_id, '_smartlearn_course_duration', true );
+								// Use parser from manual-access class if available
+								$expires_at = '';
+								$seconds = 0;
+								if ( class_exists( 'SmartLearn_LMS_Manual_Access' ) ) {
+									$seconds = (int) SmartLearn_LMS_Manual_Access::parse_duration_to_seconds( (string) $duration_raw );
+								}
+								if ( $seconds > 0 ) {
+									$expires_at = gmdate( 'Y-m-d H:i:s', $purchase_ts + $seconds );
+								}
+								if ( class_exists( 'SmartLearn_LMS_Manual_Access' ) ) {
+									SmartLearn_LMS_Manual_Access::grant_access( $user_id, $course_id, $expires_at, __( 'Автоматичне надання після покупки (міграція)', 'smartlearn-lms' ), 0 );
+								}
+								break 2;
+									break 2;
+					}
+				}
+			// Після спроби міграції — перевіримо наявність активного ручного доступу
+					}
+				}
+				// Після спроби міграції — перевіримо наявність активного ручного доступу
+				return class_exists( 'SmartLearn_LMS_Manual_Access' ) && SmartLearn_LMS_Manual_Access::user_has_active_access( $user_id, $course_id );
+			}
+			return class_exists( 'SmartLearn_LMS_Manual_Access' ) && SmartLearn_LMS_Manual_Access::user_has_active_access( $user_id, $course_id );
+		}
+
+		return false;
 	}
 	
 	/**

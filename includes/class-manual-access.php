@@ -37,6 +37,12 @@ class SmartLearn_LMS_Manual_Access {
 		add_action( 'admin_post_smartlearn_lms_delete_access', array( $this, 'handle_delete_access' ) );
 		add_action( 'admin_post_smartlearn_lms_extend_user_accesses', array( $this, 'handle_extend_user_accesses' ) );
 		add_action( 'admin_post_smartlearn_lms_extend_all_accesses', array( $this, 'handle_extend_all_accesses' ) );
+
+		// WooCommerce integration: when an order is completed, grant access based on course duration
+		if ( class_exists( 'WooCommerce' ) ) {
+			add_action( 'woocommerce_order_status_completed', array( $this, 'handle_order_completed' ), 10, 1 );
+			add_action( 'woocommerce_payment_complete', array( $this, 'handle_order_completed' ), 10, 1 );
+		}
 	}
 
 	/**
@@ -213,6 +219,26 @@ class SmartLearn_LMS_Manual_Access {
 	}
 
 	/**
+	 * Public wrapper to get latest expiry value for user/course pair.
+	 *
+	 * @param int $user_id
+	 * @param int $course_id
+	 * @return string Normalized expires_at ('2099...' for lifetime) or '' if none
+	 */
+	public static function get_user_expires_at( $user_id, $course_id ) {
+		global $wpdb;
+		$table_name = self::get_table_name();
+		$expires_at = $wpdb->get_var(
+			$wpdb->prepare(
+				"SELECT expires_at FROM {$table_name} WHERE user_id = %d AND course_id = %d ORDER BY id DESC LIMIT 1",
+				absint( $user_id ),
+				absint( $course_id )
+			)
+		);
+		return self::normalize_expires_at( $expires_at );
+	}
+
+	/**
 	 * Remove duplicate access rows, keeping newest one per user/course.
 	 *
 	 * @return void
@@ -308,6 +334,181 @@ class SmartLearn_LMS_Manual_Access {
 		) {$charset_collate};";
 
 		dbDelta( $sql );
+	}
+
+	/**
+	 * Public helper to grant access programmatically (used for purchases and external integrations).
+	 *
+	 * @param int $user_id
+	 * @param int $course_id
+	 * @param string $expires_at Datetime in 'Y-m-d H:i:s' or empty for lifetime
+	 * @param string $note
+	 * @param int $granted_by
+	 * @return bool True if active access was saved
+	 */
+	public static function grant_access( $user_id, $course_id, $expires_at = '', $note = '', $granted_by = 0 ) {
+		$instance = new self();
+		$expires_at = self::normalize_expires_at( $expires_at );
+
+		global $wpdb;
+		$table_name = self::get_table_name();
+		$now = current_time( 'mysql' );
+
+		$existing_id = (int) $wpdb->get_var(
+			$wpdb->prepare(
+				"SELECT id FROM {$table_name} WHERE user_id = %d AND course_id = %d ORDER BY id DESC LIMIT 1",
+				absint( $user_id ),
+				absint( $course_id )
+			)
+		);
+
+		if ( $existing_id > 0 ) {
+			$written = $wpdb->update(
+				$table_name,
+				array(
+					'granted_by' => absint( $granted_by ),
+					'created_at' => $now,
+					'expires_at' => $expires_at,
+					'note' => (string) $note,
+				),
+				array( 'id' => $existing_id ),
+				array( '%d', '%s', '%s', '%s' ),
+				array( '%d' )
+			);
+			$write_ok = ( false !== $written );
+			$event = 'extended';
+		} else {
+			$inserted = $wpdb->insert(
+				$table_name,
+				array(
+					'user_id' => absint( $user_id ),
+					'course_id' => absint( $course_id ),
+					'granted_by' => absint( $granted_by ),
+					'created_at' => $now,
+					'expires_at' => $expires_at,
+					'note' => (string) $note,
+				),
+				array( '%d', '%d', '%d', '%s', '%s', '%s' )
+			);
+			$write_ok = ( false !== $inserted );
+			$event = 'granted';
+		}
+
+		if ( ! $write_ok ) {
+			return false;
+		}
+
+		// Normalize duplicates
+		$instance->deduplicate_user_course_rows();
+
+		// Notify and log if access is active
+		if ( self::user_has_active_access( $user_id, $course_id ) ) {
+			$instance->notify_access_change( $user_id, $course_id, $event, $expires_at );
+			$instance->log_access_history( $user_id, $course_id, $event, $expires_at, $note );
+			return true;
+		}
+
+		return false;
+	}
+
+	/**
+	 * Handle WooCommerce order completion and grant course access based on linked products.
+	 *
+	 * @param int|WC_Order $order_arg
+	 * @return void
+	 */
+	public function handle_order_completed( $order_arg ) {
+		if ( ! class_exists( 'WC_Order' ) ) {
+			return;
+		}
+		$order = is_object( $order_arg ) ? $order_arg : wc_get_order( $order_arg );
+		if ( ! $order ) {
+			return;
+		}
+		$user_id = (int) $order->get_customer_id();
+		$purchase_ts = $order->get_date_created() ? $order->get_date_created()->getTimestamp() : current_time( 'timestamp' );
+
+		foreach ( $order->get_items() as $item ) {
+			$product_id = $item->get_product_id();
+			if ( ! $product_id ) {
+				continue;
+			}
+
+			// Find courses linked to this product
+			$courses = get_posts(
+				array(
+					'post_type' => 'smartlearn_course',
+					'posts_per_page' => -1,
+					'meta_key' => '_smartlearn_course_product_id',
+					'meta_value' => $product_id,
+					'post_status' => array( 'publish', 'draft' ),
+				)
+			);
+
+			if ( empty( $courses ) ) {
+				continue;
+			}
+
+				foreach ( $courses as $course ) {
+				$duration_raw = get_post_meta( $course->ID, '_smartlearn_course_duration', true );
+				$seconds = self::parse_duration_to_seconds( (string) $duration_raw );
+				if ( $seconds <= 0 ) {
+					// Lifetime
+					$expires_at = '';
+				} else {
+					$expires_at = gmdate( 'Y-m-d H:i:s', $purchase_ts + $seconds );
+				}
+
+					$granted = self::grant_access( $user_id, $course->ID, $expires_at, __( 'Надано автоматично після покупки', 'smartlearn-lms' ), 0 );
+
+					// Update simple purchase statistics on the course
+					if ( $granted ) {
+						$count = (int) get_post_meta( $course->ID, '_smartlearn_course_purchases_count', true );
+						$count++;
+						update_post_meta( $course->ID, '_smartlearn_course_purchases_count', $count );
+						update_post_meta( $course->ID, '_smartlearn_course_last_purchase', gmdate( 'Y-m-d H:i:s', $purchase_ts ) );
+					}
+			}
+		}
+	}
+
+	/**
+	 * Простіший парсер тривалості з текстового поля в секунди.
+	 * Підтримує українські/російські та англійські скорочення: дн, день, днів, тижн, міс, місяць, год, хв
+	 * Якщо не розпізнано або значення порожнє — повертає 0 (безстроково).
+	 *
+	 * @param string $text
+	 * @return int seconds
+	 */
+	public static function parse_duration_to_seconds( $text ) {
+		$text = trim( mb_strtolower( (string) $text ) );
+		if ( '' === $text ) {
+			return 0;
+		}
+
+		// Try to find number + unit
+		if ( preg_match( '/(\\d+)\\s*(год|годин|година|h|hour|hours)/iu', $text, $m ) ) {
+			return (int) $m[1] * HOUR_IN_SECONDS;
+		}
+		if ( preg_match( '/(\\d+)\\s*(хв|хвилин|хвилина|m|min|mins|minute)/iu', $text, $m ) ) {
+			return (int) $m[1] * MINUTE_IN_SECONDS;
+		}
+		if ( preg_match( '/(\\d+)\\s*(дн|днів|день|day|days)/iu', $text, $m ) ) {
+			return (int) $m[1] * DAY_IN_SECONDS;
+		}
+		if ( preg_match( '/(\\d+)\\s*(тиж|тижд|тижні|тижнів|week|weeks)/iu', $text, $m ) ) {
+			return (int) $m[1] * WEEK_IN_SECONDS;
+		}
+		if ( preg_match( '/(\\d+)\\s*(міс|місяць|місяців|month|months)/iu', $text, $m ) ) {
+			return (int) $m[1] * 30 * DAY_IN_SECONDS;
+		}
+
+		// Fallback: if text is just a number, treat as months (number = months)
+		if ( preg_match( '/^(\d+)$/', $text, $m ) ) {
+			return (int) $m[1] * 30 * DAY_IN_SECONDS;
+		}
+
+		return 0;
 	}
 
 	/**

@@ -115,9 +115,10 @@ class SmartLearn_LMS_Meta_Boxes {
 			
 			<p>
 				<label for="smartlearn_course_duration">
-					<strong><?php esc_html_e( 'Тривалість курсу:', 'smartlearn-lms' ); ?></strong>
+					<strong><?php esc_html_e( 'Термін дії курсу (у місяцях):', 'smartlearn-lms' ); ?></strong>
 				</label><br/>
-				<input type="text" name="smartlearn_course_duration" id="smartlearn_course_duration" value="<?php echo esc_attr( get_post_meta( $post->ID, '_smartlearn_course_duration', true ) ); ?>" style="width:100%;max-width:400px;" placeholder="<?php esc_attr_e( 'наприклад: 4 тижні, 12 годин', 'smartlearn-lms' ); ?>" />
+				<input type="number" min="1" step="1" name="smartlearn_course_duration" id="smartlearn_course_duration" value="<?php echo esc_attr( get_post_meta( $post->ID, '_smartlearn_course_duration', true ) ); ?>" style="width:100%;max-width:200px;" placeholder="<?php esc_attr_e( 'Залиште порожнім для безстрокового доступу. Вкажіть число місяців, наприклад: 6', 'smartlearn-lms' ); ?>" />
+				<p class="description"><?php esc_html_e( 'Якщо поле порожнє — доступ буде безстроковим. Вказуйте тільки число місяців (мінімум 1).', 'smartlearn-lms' ); ?></p>
 			</p>
 			
 			<p>
@@ -394,8 +395,14 @@ class SmartLearn_LMS_Meta_Boxes {
 		$product_id = isset( $_POST['smartlearn_course_product_id'] ) ? absint( $_POST['smartlearn_course_product_id'] ) : '';
 		update_post_meta( $post_id, '_smartlearn_course_product_id', $product_id );
 		
-		// Save duration
-		$duration = isset( $_POST['smartlearn_course_duration'] ) ? sanitize_text_field( $_POST['smartlearn_course_duration'] ) : '';
+		// Save duration (months). Empty = lifetime. Ensure minimum 1 month when provided.
+		$duration_raw = isset( $_POST['smartlearn_course_duration'] ) ? wp_unslash( $_POST['smartlearn_course_duration'] ) : '';
+		$duration_raw = trim( (string) $duration_raw );
+		if ( '' === $duration_raw ) {
+			$duration = '';
+		} else {
+			$duration = max( 1, intval( $duration_raw ) );
+		}
 		update_post_meta( $post_id, '_smartlearn_course_duration', $duration );
 		
 		// Save level

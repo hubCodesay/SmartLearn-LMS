@@ -566,6 +566,19 @@ class SmartLearn_LMS_Templates {
             echo '<span class="value">' . esc_html( $lessons_count ) . '</span>';
             echo '</div>';
         }
+
+        // Show current user's access expiry if available
+        $user_id = get_current_user_id();
+        if ( $user_id && class_exists( 'SmartLearn_LMS_Manual_Access' ) ) {
+            $expires = SmartLearn_LMS_Manual_Access::get_user_expires_at( $user_id, $course_id );
+            if ( $expires ) {
+                $label = ( $expires === SmartLearn_LMS_Manual_Access::LIFETIME_EXPIRES_AT ) ? __( 'Безстроково', 'smartlearn-lms' ) : $expires;
+                echo '<div class="smartlearn-course-meta-item access-expires">';
+                echo '<span class="label">' . __( 'Доступ дійсний до:', 'smartlearn-lms' ) . '</span> ';
+                echo '<span class="value">' . esc_html( $label ) . '</span>';
+                echo '</div>';
+            }
+        }
         
         echo '</div>';
     }
