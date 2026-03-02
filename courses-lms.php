@@ -122,10 +122,20 @@ class SmartLearn_Courses_LMS {
 		
 		// Create default options
 		add_option( 'smartlearn_lms_version', SMARTLEARN_LMS_VERSION );
+
+		// Schedule cron to check expired accesses hourly
+		if ( ! wp_next_scheduled( 'smartlearn_lms_check_expired_accesses' ) ) {
+			wp_schedule_event( time(), 'hourly', 'smartlearn_lms_check_expired_accesses' );
+		}
 	}
 	
 	public function deactivate() {
 		flush_rewrite_rules();
+
+		// Clear scheduled cron
+		if ( wp_next_scheduled( 'smartlearn_lms_check_expired_accesses' ) ) {
+			wp_clear_scheduled_hook( 'smartlearn_lms_check_expired_accesses' );
+		}
 	}
 }
 

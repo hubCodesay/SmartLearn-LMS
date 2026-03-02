@@ -43,6 +43,9 @@ class SmartLearn_LMS_Manual_Access {
 			add_action( 'woocommerce_order_status_completed', array( $this, 'handle_order_completed' ), 10, 1 );
 			add_action( 'woocommerce_payment_complete', array( $this, 'handle_order_completed' ), 10, 1 );
 		}
+
+		// Cron job to process expired accesses (logs revoked events but keeps history rows)
+		add_action( 'smartlearn_lms_check_expired_accesses', array( $this, 'process_expired_accesses' ) );
 	}
 
 	/**
@@ -236,6 +239,60 @@ class SmartLearn_LMS_Manual_Access {
 			)
 		);
 		return self::normalize_expires_at( $expires_at );
+	}
+
+	/**
+	 * Cron worker: find expired manual accesses and log a 'revoked' history entry if not already logged.
+	 * Does not delete manual access rows; only records immutable history and fires access_changed action.
+	 *
+	 * @return void
+	 */
+	public function process_expired_accesses() {
+		if ( ! class_exists( 'SmartLearn_LMS_Manual_Access' ) ) {
+			return;
+		}
+
+		global $wpdb;
+		$table = self::get_table_name();
+		$history_table = self::get_history_table_name();
+		$now = current_time( 'mysql' );
+
+		$rows = $wpdb->get_results(
+			$wpdb->prepare(
+				"SELECT id, user_id, course_id, expires_at, created_at, note FROM {$table} WHERE expires_at IS NOT NULL AND expires_at <> %s AND expires_at < %s",
+				self::LIFETIME_EXPIRES_AT,
+				$now
+			)
+		);
+
+		if ( empty( $rows ) ) {
+			return;
+		}
+
+		foreach ( $rows as $r ) {
+			$user_id = absint( $r->user_id );
+			$course_id = absint( $r->course_id );
+			$expires_at = (string) $r->expires_at;
+
+			// Check if a revoke entry for this exact user/course/expires_at already exists to avoid duplicates
+			$exists = $wpdb->get_var(
+				$wpdb->prepare(
+					"SELECT COUNT(*) FROM {$history_table} WHERE user_id = %d AND course_id = %d AND action = %s AND expires_at = %s",
+					$user_id,
+					$course_id,
+					'revoked',
+					$expires_at
+				)
+			);
+
+			if ( $exists && intval( $exists ) > 0 ) {
+				continue;
+			}
+
+			// Log revoked event and notify
+			$this->log_access_history( $user_id, $course_id, 'revoked', $expires_at, __( 'Автоматичне завершення за таймером', 'smartlearn-lms' ) );
+			$this->notify_access_change( $user_id, $course_id, 'revoked', $expires_at );
+		}
 	}
 
 	/**
@@ -1163,6 +1220,70 @@ class SmartLearn_LMS_Manual_Access {
 			 ORDER BY a.created_at DESC
 			 LIMIT 500"
 		);
+
+		// Also include users who purchased the linked product (if any) but don't have manual access rows yet.
+		if ( class_exists( 'WooCommerce' ) ) {
+			// Build a set of existing user-course pairs to avoid duplicates
+			$existing_pairs = array();
+			foreach ( (array) $rows as $r ) {
+				$key = absint( $r->user_id ) . ':' . absint( $r->course_id );
+				$existing_pairs[ $key ] = true;
+			}
+
+			// Map products to courses
+			$product_map = array();
+			$courses_all = get_posts( array( 'post_type' => 'smartlearn_course', 'posts_per_page' => -1, 'post_status' => array( 'publish', 'draft' ) ) );
+			foreach ( $courses_all as $c ) {
+				$pid = absint( get_post_meta( $c->ID, '_smartlearn_course_product_id', true ) );
+				if ( $pid ) {
+					$product_map[ $pid ] = $c->ID;
+				}
+			}
+
+			foreach ( $product_map as $product_id => $course_id ) {
+				$purchasers = self::get_user_ids_by_product_purchase( $product_id );
+				if ( empty( $purchasers ) ) {
+					continue;
+				}
+				foreach ( $purchasers as $uid ) {
+					$key = $uid . ':' . $course_id;
+					if ( isset( $existing_pairs[ $key ] ) ) {
+						continue;
+					}
+					$user = get_user_by( 'id', $uid );
+					if ( ! $user ) {
+						continue;
+					}
+					// Try to get latest order date for this user/product
+					$purchase_date = '';
+					if ( function_exists( 'wc_get_orders' ) ) {
+						$orders = wc_get_orders( array( 'customer_id' => $uid, 'limit' => 1, 'status' => array( 'completed', 'processing', 'on-hold' ), 'orderby' => 'date', 'order' => 'DESC' ) );
+						if ( ! empty( $orders ) ) {
+							$o = $orders[0];
+							$dt = $o->get_date_created();
+							$purchase_date = $dt ? $dt->date( 'Y-m-d H:i:s' ) : '';
+						}
+					}
+
+					// Build a pseudo-row similar to manual access rows
+					$row = (object) array(
+						'id' => 0,
+						'user_id' => $uid,
+						'course_id' => $course_id,
+						'granted_by' => 0,
+						'created_at' => $purchase_date ?: $now,
+						'expires_at' => '',
+						'note' => __( 'Купівля товару', 'smartlearn-lms' ),
+						'user_name' => $user->display_name,
+						'user_email' => $user->user_email,
+						'course_title' => get_the_title( $course_id ),
+						'granted_by_name' => '',
+					);
+					$rows[] = $row;
+					$existing_pairs[ $key ] = true;
+				}
+			}
+		}
 		$history_rows = self::get_access_history(
 			array(
 				'limit' => 500,
