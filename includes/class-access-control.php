@@ -12,6 +12,42 @@ class SmartLearn_LMS_Access_Control {
 	public function __construct() {
 		// Hooks are handled in Templates class
 	}
+
+	/**
+	 * Ensure a purchase-backed access row exists for a user/course pair.
+	 *
+	 * @param int $user_id
+	 * @param int $course_id
+	 * @param int $product_id
+	 * @return void
+	 */
+	private static function ensure_purchase_access_record( $user_id, $course_id, $product_id ) {
+		if ( ! class_exists( 'SmartLearn_LMS_Manual_Access' ) || ! function_exists( 'wc_get_orders' ) ) {
+			return;
+		}
+
+		$orders = wc_get_orders( array(
+			'customer' => $user_id,
+			'limit'    => 10,
+			'status'   => array( 'completed', 'processing', 'on-hold' ),
+		) );
+
+		foreach ( $orders as $order ) {
+			foreach ( $order->get_items() as $item ) {
+				if ( (int) $item->get_product_id() === (int) $product_id ) {
+					$purchase_ts = $order->get_date_created() ? $order->get_date_created()->getTimestamp() : current_time( 'timestamp' );
+					$duration_raw = get_post_meta( $course_id, '_smartlearn_course_duration', true );
+					$seconds = (int) SmartLearn_LMS_Manual_Access::parse_duration_to_seconds( (string) $duration_raw );
+					$expires_at = '';
+					if ( $seconds > 0 ) {
+						$expires_at = gmdate( 'Y-m-d H:i:s', $purchase_ts + $seconds );
+					}
+					SmartLearn_LMS_Manual_Access::grant_access( $user_id, $course_id, $expires_at, __( 'Автоматичне надання після покупки (міграція)', 'smartlearn-lms' ), 0 );
+					return;
+				}
+			}
+		}
+	}
 	
 	/**
 	 * Перевірити чи користувач має доступ до курсу
@@ -58,37 +94,7 @@ class SmartLearn_LMS_Access_Control {
 			// Якщо є активний ручний доступ — вже повернули true вище.
 			// Спробуємо створити ручний запис доступу для покупок без наявного запису (міграція старих покупок).
 			if ( class_exists( 'SmartLearn_LMS_Manual_Access' ) && ! SmartLearn_LMS_Manual_Access::user_has_active_access( $user_id, $course_id ) ) {
-				// Спробувати знайти останнє замовлення користувача з цим товаром
-				if ( function_exists( 'wc_get_orders' ) ) {
-					$orders = wc_get_orders( array(
-						'customer' => $user_id,
-						'limit' => 10,
-						'status' => array( 'completed', 'processing', 'on-hold' ),
-					) );
-					foreach ( $orders as $order ) {
-						foreach ( $order->get_items() as $item ) {
-							if ( $item->get_product_id() == $product_id ) {
-								$purchase_ts = $order->get_date_created() ? $order->get_date_created()->getTimestamp() : current_time( 'timestamp' );
-								$duration_raw = get_post_meta( $course_id, '_smartlearn_course_duration', true );
-								// Use parser from manual-access class if available
-								$expires_at = '';
-								$seconds = 0;
-								if ( class_exists( 'SmartLearn_LMS_Manual_Access' ) ) {
-									$seconds = (int) SmartLearn_LMS_Manual_Access::parse_duration_to_seconds( (string) $duration_raw );
-								}
-								if ( $seconds > 0 ) {
-									$expires_at = gmdate( 'Y-m-d H:i:s', $purchase_ts + $seconds );
-								}
-								if ( class_exists( 'SmartLearn_LMS_Manual_Access' ) ) {
-									SmartLearn_LMS_Manual_Access::grant_access( $user_id, $course_id, $expires_at, __( 'Автоматичне надання після покупки (міграція)', 'smartlearn-lms' ), 0 );
-								}
-								break 2;
-									break 2;
-					}
-				}
-			// Після спроби міграції — перевіримо наявність активного ручного доступу
-					}
-				}
+				self::ensure_purchase_access_record( $user_id, $course_id, $product_id );
 				// Після спроби міграції — перевіримо наявність активного ручного доступу
 				return class_exists( 'SmartLearn_LMS_Manual_Access' ) && SmartLearn_LMS_Manual_Access::user_has_active_access( $user_id, $course_id );
 			}

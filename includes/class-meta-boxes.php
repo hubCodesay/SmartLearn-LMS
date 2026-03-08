@@ -71,6 +71,14 @@ class SmartLearn_LMS_Meta_Boxes {
 		$is_free = get_post_meta( $post->ID, '_smartlearn_course_is_free', true );
 		$instructor_name = get_post_meta( $post->ID, '_smartlearn_course_instructor_name', true );
 		$start_sms = get_post_meta( $post->ID, '_smartlearn_course_start_sms', true );
+		$notify_on_start = get_post_meta( $post->ID, '_smartlearn_course_notify_on_start', true );
+		$start_ts = (int) get_post_meta( $post->ID, '_smartlearn_course_start_ts', true );
+		$start_datetime_value = '';
+		if ( $start_ts > 0 ) {
+			$start_datetime = new DateTimeImmutable( '@' . $start_ts );
+			$start_datetime = $start_datetime->setTimezone( wp_timezone() );
+			$start_datetime_value = $start_datetime->format( 'Y-m-d\TH:i' );
+		}
 		$current_user = wp_get_current_user();
 		$test_email = ( $current_user instanceof WP_User ) ? $current_user->user_email : '';
 		
@@ -153,6 +161,19 @@ class SmartLearn_LMS_Meta_Boxes {
 			<hr style="margin:20px 0;">
 
 			<h3 style="margin:0 0 12px;"><?php esc_html_e( 'SMS на email', 'smartlearn-lms' ); ?></h3>
+			<p>
+				<label for="smartlearn_course_start_at">
+					<strong><?php esc_html_e( 'Дата та час старту стріму:', 'smartlearn-lms' ); ?></strong>
+				</label><br/>
+				<input type="datetime-local" name="smartlearn_course_start_at" id="smartlearn_course_start_at" value="<?php echo esc_attr( $start_datetime_value ); ?>" style="width:100%;max-width:260px;">
+				<p class="description"><?php esc_html_e( 'Використовується для планування SMS та старту відліку доступу після початку стріму.', 'smartlearn-lms' ); ?></p>
+			</p>
+			<p>
+				<label>
+					<input type="checkbox" name="smartlearn_course_notify_on_start" value="1" <?php checked( $notify_on_start, '1' ); ?> />
+					<?php esc_html_e( 'Автоматично надіслати SMS на email в момент старту стріму всім, хто купив курс', 'smartlearn-lms' ); ?>
+				</label>
+			</p>
 			<p>
 				<label for="smartlearn_course_start_sms">
 					<strong><?php esc_html_e( 'Текст SMS (на email):', 'smartlearn-lms' ); ?></strong>
@@ -416,6 +437,31 @@ class SmartLearn_LMS_Meta_Boxes {
 		// Save notifications settings
 		$start_sms = isset( $_POST['smartlearn_course_start_sms'] ) ? sanitize_textarea_field( $_POST['smartlearn_course_start_sms'] ) : '';
 		update_post_meta( $post_id, '_smartlearn_course_start_sms', $start_sms );
+
+		$notify_on_start = isset( $_POST['smartlearn_course_notify_on_start'] ) ? '1' : '';
+		update_post_meta( $post_id, '_smartlearn_course_notify_on_start', $notify_on_start );
+		delete_post_meta( $post_id, '_smartlearn_course_access_from_stream_start' );
+
+		$start_at_raw = isset( $_POST['smartlearn_course_start_at'] ) ? sanitize_text_field( wp_unslash( $_POST['smartlearn_course_start_at'] ) ) : '';
+		$start_ts = 0;
+		if ( '' !== $start_at_raw ) {
+			$timezone = wp_timezone();
+			$start_dt = date_create_immutable_from_format( 'Y-m-d\TH:i', $start_at_raw, $timezone );
+			if ( $start_dt instanceof DateTimeImmutable ) {
+				$start_ts = $start_dt->getTimestamp();
+			}
+		}
+
+		if ( $start_ts > 0 ) {
+			update_post_meta( $post_id, '_smartlearn_course_start_ts', $start_ts );
+		} else {
+			delete_post_meta( $post_id, '_smartlearn_course_start_ts' );
+			delete_post_meta( $post_id, '_smartlearn_course_last_sent_ts' );
+		}
+
+		if ( class_exists( 'SmartLearn_LMS_Notifications' ) ) {
+			SmartLearn_LMS_Notifications::schedule_course_notification( $post_id, $start_ts );
+		}
 	}
 	
 	/**
