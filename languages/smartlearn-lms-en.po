@@ -1,0 +1,166 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: SmartLearn LMS 1.0.0\n"
+"Report-Msgid-Bugs-To: https://stabion.studio/support/\n"
+"POT-Creation-Date: 2025-12-10 12:00+0000\n"
+"PO-Revision-Date: 2025-12-10 12:00+0000\n"
+"Last-Translator: Stabion Studio <info@stabion.studio>\n"
+"Language-Team: English\n"
+"Language: en\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+msgid "SmartLearn LMS"
+msgstr "SmartLearn LMS"
+
+msgid "Налаштування LMS"
+msgstr "LMS Settings"
+
+msgid "Налаштування"
+msgstr "Settings"
+
+msgid "Мова плагіна"
+msgstr "Plugin Language"
+
+msgid "Виберіть мову інтерфейсу плагіна"
+msgstr "Select plugin interface language"
+
+msgid "URL сторінки входу"
+msgstr "Login Page URL"
+
+msgid "URL на який будуть перенаправлятися неавторизовані користувачі"
+msgstr "URL where unauthorized users will be redirected"
+
+msgid "Курсів на сторінку"
+msgstr "Courses Per Page"
+
+msgid "Кількість курсів у шорткоді за замовчуванням (-1 = всі)"
+msgstr "Number of courses in shortcode by default (-1 = all)"
+
+msgid "Колонок за замовчуванням"
+msgstr "Default Columns"
+
+msgid "Кількість колонок у сітці курсів"
+msgstr "Number of columns in courses grid"
+
+msgid "Тексти кнопок"
+msgstr "Button Texts"
+
+msgid "Переглянути курс:"
+msgstr "View Course:"
+
+msgid "Переглянути курс"
+msgstr "View Course"
+
+msgid "Купити курс:"
+msgstr "Buy Course:"
+
+msgid "Купити курс"
+msgstr "Buy Course"
+
+msgid "Увійти:"
+msgstr "Login:"
+
+msgid "Увійти"
+msgstr "Login"
+
+msgid "Курси"
+msgstr "Courses"
+
+msgid "Курс"
+msgstr "Course"
+
+msgid "Всі курси"
+msgstr "All Courses"
+
+msgid "Додати новий курс"
+msgstr "Add New Course"
+
+msgid "Редагувати курс"
+msgstr "Edit Course"
+
+msgid "Переглянути сторінку курсу"
+msgstr "View Course Page"
+
+msgid "Шукати курси"
+msgstr "Search Courses"
+
+msgid "Уроки"
+msgstr "Lessons"
+
+msgid "Урок"
+msgstr "Lesson"
+
+msgid "Всі уроки"
+msgstr "All Lessons"
+
+msgid "Додати новий урок"
+msgstr "Add New Lesson"
+
+msgid "Редагувати урок"
+msgstr "Edit Lesson"
+
+msgid "Безкоштовний курс"
+msgstr "Free Course"
+
+msgid "Платний курс"
+msgstr "Paid Course"
+
+msgid "Оберіть товар WooCommerce"
+msgstr "Select WooCommerce Product"
+
+msgid "Тривалість курсу"
+msgstr "Course Duration"
+
+msgid "Наприклад: 4 тижні"
+msgstr "For example: 4 weeks"
+
+msgid "Рівень складності"
+msgstr "Difficulty Level"
+
+msgid "Початковий"
+msgstr "Beginner"
+
+msgid "Середній"
+msgstr "Intermediate"
+
+msgid "Просунутий"
+msgstr "Advanced"
+
+msgid "Це безкоштовний урок (доступний без покупки)"
+msgstr "This is a free lesson (available without purchase)"
+
+msgid "URL відео"
+msgstr "Video URL"
+
+msgid "Вставте посилання на YouTube або Vimeo відео"
+msgstr "Insert YouTube or Vimeo video link"
+
+msgid "Тривалість уроку"
+msgstr "Lesson Duration"
+
+msgid "Наприклад: 15 хв"
+msgstr "For example: 15 min"
+
+msgid "Доступ до цього курсу обмежено. Будь ласка, увійдіть або придбайте курс."
+msgstr "Access to this course is restricted. Please login or purchase the course."
+
+msgid "Доступ до цього уроку обмежено."
+msgstr "Access to this lesson is restricted."
+
+msgid "уроків"
+msgstr "lessons"
+
+msgid "Назад до курсу"
+msgstr "Back to Course"
+
+msgid "Попередній урок"
+msgstr "Previous Lesson"
+
+msgid "Наступний урок"
+msgstr "Next Lesson"
+
+msgid "SmartLearn LMS потребує активації WooCommerce для роботи."
+msgstr "SmartLearn LMS requires WooCommerce activation to work."

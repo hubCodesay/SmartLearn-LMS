@@ -1,0 +1,604 @@
+<?php
+/**
+ * Templates - шаблони для відображення курсів та уроків (copy)
+ */
+
+if ( ! defined( 'ABSPATH' ) ) {
+    exit;
+}
+
+class SmartLearn_LMS_Templates {
+    private static $settings_cache = array();
+    
+    public function __construct() {
+        add_filter( 'template_include', array( $this, 'load_course_template' ) );
+        add_filter( 'template_include', array( $this, 'load_lesson_template' ) );
+    }
+
+    private static function get_setting( $key, $default = '' ) {
+        if ( ! array_key_exists( $key, self::$settings_cache ) ) {
+            self::$settings_cache[ $key ] = get_option( $key, $default );
+        }
+
+        return self::$settings_cache[ $key ];
+    }
+
+    /**
+     * Get login / my-account URL.
+     * Prefers plugin option, then WooCommerce My Account, then wp_login_url.
+     */
+    private static function get_login_url( $redirect_url = '' ) {
+        $login_url = trim( (string) self::get_setting( 'smartlearn_lms_login_url', '' ) );
+        if ( empty( $login_url ) && function_exists( 'wc_get_page_permalink' ) ) {
+            $login_url = wc_get_page_permalink( 'myaccount' );
+        }
+        if ( empty( $login_url ) ) {
+            $login_url = wp_login_url( $redirect_url ?: home_url( '/' ) );
+        }
+        return $login_url;
+    }
+
+    /**
+     * Get WooCommerce product permalink linked to the course.
+     */
+    private static function get_course_purchase_url( $course_id ) {
+        $product_id = get_post_meta( $course_id, '_smartlearn_course_product_id', true );
+        $product_id = $product_id ? absint( $product_id ) : 0;
+        if ( ! $product_id ) {
+            return '';
+        }
+
+        if ( function_exists( 'wc_get_checkout_url' ) ) {
+            return add_query_arg(
+                array(
+                    'add-to-cart' => $product_id,
+                ),
+                wc_get_checkout_url()
+            );
+        }
+
+        $product_url = get_permalink( $product_id );
+        return $product_url ? $product_url : '';
+    }
+    
+    /**
+     * Завантажити шаблон для курсу
+     */
+    public function load_course_template( $template ) {
+        if ( is_singular( 'smartlearn_course' ) ) {
+            $plugin_template = SMARTLEARN_LMS_PATH . 'templates/single-course.php';
+            if ( file_exists( $plugin_template ) ) {
+                return $plugin_template;
+            }
+        }
+        return $template;
+    }
+    
+    /**
+     * Завантажити шаблон для уроку
+     */
+    public function load_lesson_template( $template ) {
+        if ( is_singular( 'smartlearn_lesson' ) ) {
+            $plugin_template = SMARTLEARN_LMS_PATH . 'templates/single-lesson.php';
+            if ( file_exists( $plugin_template ) ) {
+                return $plugin_template;
+            }
+        }
+        return $template;
+    }
+    
+    /**
+     * Отримати список уроків курсу
+     */
+    public static function get_course_lessons( $course_id, $only_free = false ) {
+        $args = array(
+            'post_type' => 'smartlearn_lesson',
+            'posts_per_page' => -1,
+            'meta_key' => '_smartlearn_lesson_course_id',
+            'meta_value' => $course_id,
+            'orderby' => 'menu_order',
+            'order' => 'ASC',
+        );
+
+        if ( $only_free ) {
+            $args['meta_query'] = array(
+                array(
+                    'key' => '_smartlearn_lesson_is_free',
+                    'value' => '1',
+                    'compare' => '=',
+                ),
+            );
+        }
+
+        $lessons = get_posts( $args );
+        return $lessons;
+    }
+    
+    /**
+     * Відобразити список уроків курсу
+     */
+    public static function display_course_lessons( $course_id, $only_free = false ) {
+        $lessons = self::get_course_lessons( $course_id, $only_free );
+        $user_id = get_current_user_id();
+        $has_course_access = SmartLearn_LMS_Access_Control::user_has_course_access( $course_id, $user_id );
+        
+        if ( empty( $lessons ) ) {
+            echo '<p>' . __( 'Уроків поки немає.', 'smartlearn-lms' ) . '</p>';
+            return;
+        }
+
+        // Single CTA block when course is locked (guest -> login; logged-in -> buy)
+        if ( ! $has_course_access ) {
+            if ( ! $user_id ) {
+                $message = __( 'Щоб відкрити уроки, потрібно увійти.', 'smartlearn-lms' );
+                $button_text = self::get_setting( 'smartlearn_lms_button_text_login', __( 'Увійти', 'smartlearn-lms' ) );
+                $button_url = self::get_login_url( get_permalink( $course_id ) );
+            } else {
+                $message = __( 'Щоб відкрити уроки, потрібно придбати курс.', 'smartlearn-lms' );
+                $button_text = self::get_setting( 'smartlearn_lms_button_text_buy', __( 'Купити курс', 'smartlearn-lms' ) );
+                $button_url = self::get_course_purchase_url( $course_id );
+            }
+
+            echo '<div class="smartlearn-course-locked">';
+            echo '<h3>' . esc_html( $message ) . '</h3>';
+            if ( ! empty( $button_url ) ) {
+                echo '<p><a class="smartlearn-access-button" href="' . esc_url( $button_url ) . '">' . esc_html( $button_text ) . '</a></p>';
+            }
+            echo '</div>';
+        }
+        
+        echo '<div class="smartlearn-lessons-list">';
+		
+        foreach ( $lessons as $lesson ) {
+            $is_free = get_post_meta( $lesson->ID, '_smartlearn_lesson_is_free', true ) === '1';
+            $has_access = $has_course_access || $is_free;
+            if ( ! $has_access ) {
+                $has_access = SmartLearn_LMS_Access_Control::user_has_lesson_access( $lesson->ID, $user_id );
+            }
+            $duration = get_post_meta( $lesson->ID, '_smartlearn_lesson_duration', true );
+
+            $classes = array( 'smartlearn-lesson-item' );
+            if ( $has_access ) {
+                $classes[] = 'has-access';
+            } else {
+                $classes[] = 'no-access';
+            }
+            if ( $is_free ) {
+                $classes[] = 'is-free';
+            }
+
+            echo '<div class="' . esc_attr( implode( ' ', $classes ) ) . '">';
+            echo '<div class="smartlearn-lesson-content">';
+
+            // Назва (урок відкривається тільки якщо є доступ)
+            $title_classes = 'smartlearn-lesson-title';
+            if ( ! $has_access ) {
+                $title_classes .= ' smartlearn-lesson-locked';
+            }
+			if ( $has_access ) {
+				echo '<a href="' . esc_url( get_permalink( $lesson->ID ) ) . '" class="' . esc_attr( $title_classes ) . '">';
+				echo esc_html( $lesson->post_title );
+				echo '</a>';
+			} else {
+				echo '<span class="' . esc_attr( $title_classes ) . '">' . esc_html( $lesson->post_title ) . '</span>';
+			}
+
+            if ( $duration ) {
+                echo '<div class="smartlearn-lesson-meta">';
+                echo '<span class="smartlearn-lesson-duration">' . esc_html( $duration ) . '</span>';
+                echo '</div>';
+            }
+
+            echo '</div>';
+            echo '</div>';
+        }
+        
+        echo '</div>';
+    }
+    
+    /**
+     * Is YouTube interaction protection enabled for this lesson.
+     * Default is enabled for backward compatibility.
+     */
+    private static function is_youtube_protection_enabled( $lesson_id ) {
+        $flag = get_post_meta( $lesson_id, '_smartlearn_lesson_youtube_protected', true );
+        return '' === $flag || '1' === $flag;
+    }
+
+    /**
+     * Is YouTube live chat embed enabled for this lesson.
+     */
+    private static function is_youtube_live_chat_enabled( $lesson_id ) {
+        return '1' === get_post_meta( $lesson_id, '_smartlearn_lesson_youtube_live_chat_enabled', true );
+    }
+
+    /**
+     * Is YouTube media in this lesson a live stream.
+     */
+    private static function is_youtube_live_stream( $lesson_id ) {
+        return '1' === get_post_meta( $lesson_id, '_smartlearn_lesson_youtube_is_live_stream', true );
+    }
+
+    /**
+     * Render YouTube live chat iframe (draft mode).
+     */
+    private static function render_youtube_live_chat( $video_id, $side_panel = false, $instance_id = '' ) {
+        $embed_domain = wp_parse_url( home_url( '/' ), PHP_URL_HOST );
+        if ( empty( $embed_domain ) ) {
+            return;
+        }
+
+        $chat_url = add_query_arg(
+            array(
+                'v' => $video_id,
+                'embed_domain' => $embed_domain,
+            ),
+            'https://www.youtube.com/live_chat'
+        );
+
+        $wrapper_style = $side_panel ? 'margin-top:0;' : 'margin-top:16px;';
+        $chat_classes = 'smartlearn-youtube-live-chat' . ( $side_panel ? ' smartlearn-youtube-live-chat--side' : '' );
+        $chat_dom_id = 'sl-chat-' . preg_replace( '/[^a-zA-Z0-9_-]/', '', (string) $instance_id );
+        $pip_btn_id = 'sl-chat-pip-btn-' . preg_replace( '/[^a-zA-Z0-9_-]/', '', (string) $instance_id );
+
+        echo '<div id="' . esc_attr( $chat_dom_id ) . '" class="' . esc_attr( $chat_classes ) . '" style="' . esc_attr( $wrapper_style ) . '">';
+        echo '<div style="display:flex; align-items:center; justify-content:space-between; gap:10px; margin:0 0 10px;">';
+        echo '<h4 style="margin:0;">' . esc_html__( 'Чат трансляції', 'smartlearn-lms' ) . '</h4>';
+        echo '<div style="display:flex; align-items:center; gap:10px;">';
+        echo '<button type="button" id="' . esc_attr( $pip_btn_id ) . '" style="font-size:12px; border:1px solid #d0d0d0; background:#fff; border-radius:6px; padding:6px 8px; cursor:pointer;">' . esc_html__( 'Міні-чат', 'smartlearn-lms' ) . '</button>';
+        echo '<a href="' . esc_url( $chat_url ) . '" target="_blank" rel="noopener noreferrer" style="font-size:13px; text-decoration:none;">' . esc_html__( 'Відкрити чат окремо', 'smartlearn-lms' ) . '</a>';
+        echo '</div>';
+        echo '</div>';
+        $iframe_style = $side_panel ? 'flex:1; min-height:0;' : '';
+        echo '<iframe src="' . esc_url( $chat_url ) . '" width="100%" height="420" style="' . esc_attr( $iframe_style ) . '" frameborder="0" loading="lazy" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>';
+        echo '</div>';
+    }
+
+    /**
+     * Відобразити відео/медіа уроку (підтримка декількох елементів: URL, Upload, Text)
+     * Виводить заголовок та опис, потім кожен елемент у відповідному форматі.
+     */
+    public static function display_lesson_video( $lesson_id ) {
+        $media = get_post_meta( $lesson_id, '_smartlearn_lesson_media', true );
+        if ( ! is_array( $media ) || empty( $media ) ) {
+            // fallback to legacy URLs
+            $video_urls = get_post_meta( $lesson_id, '_smartlearn_lesson_video_urls', true );
+            if ( is_array( $video_urls ) && ! empty( $video_urls ) ) {
+                $media = array();
+                foreach ( $video_urls as $u ) {
+                    if ( $u ) {
+                        $media[] = array( 'type' => 'url', 'value' => $u );
+                    }
+                }
+            } else {
+                $single = get_post_meta( $lesson_id, '_smartlearn_lesson_video_url', true );
+                if ( $single ) {
+                    $media = array( array( 'type' => 'url', 'value' => $single ) );
+                }
+            }
+        }
+
+        if ( ! is_array( $media ) || empty( $media ) ) {
+            return;
+        }
+
+        // Wrapper for media items (heading/description removed per request)
+        echo '<div class="smartlearn-lesson-videos">';
+
+        foreach ( $media as $item ) {
+            if ( ! isset( $item['type'] ) || ! isset( $item['value'] ) ) {
+                continue;
+            }
+            $type = $item['type'];
+            $value = $item['value'];
+
+            if ( 'url' === $type && $value ) {
+                $video_url = $value;
+                if ( preg_match( '/youtube\.com|youtu\.be/', $video_url ) ) {
+                    preg_match( '/(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/ ]{11})/', $video_url, $matches );
+                    if ( isset( $matches[1] ) ) {
+                        $video_id = $matches[1];
+                        $unique_id = 'yt-' . uniqid();
+                        $youtube_protection_enabled = self::is_youtube_protection_enabled( $lesson_id );
+                        $youtube_live_chat_enabled = self::is_youtube_live_chat_enabled( $lesson_id );
+                        $youtube_is_live_stream = self::is_youtube_live_stream( $lesson_id );
+                        $show_side_chat = $youtube_live_chat_enabled && $youtube_is_live_stream;
+                        echo '<style>
+                            .smartlearn-lesson-video.youtube_' . esc_attr($unique_id) . ' {
+                                position:relative; width:100%; border-radius:12px; overflow:hidden; background:#000;
+                                aspect-ratio:16/9; height:auto; box-shadow:0 12px 30px rgba(0,0,0,.18);
+                            }
+                            .smartlearn-yt-fullscreen-btn.fs_' . esc_attr($unique_id) . ' {
+                                position:absolute; right:12px; bottom:12px; z-index:20; border:0; border-radius:999px;
+                                background:rgba(15,15,15,.85); color:#fff; padding:9px 14px; cursor:pointer; font-size:13px; font-weight:600;
+                                backdrop-filter:blur(4px);
+                            }
+                            .smartlearn-yt-fullscreen-btn.fs_' . esc_attr($unique_id) . ':hover {
+                                background:rgba(0,0,0,.95);
+                            }
+                            .smartlearn-youtube-live-layout.layout_' . esc_attr($unique_id) . ' { display:grid; grid-template-columns:minmax(0, 1.7fr) minmax(280px, 1fr); gap:16px; align-items:start; margin-bottom:16px; }
+                            .smartlearn-youtube-live-layout.layout_' . esc_attr($unique_id) . ' .smartlearn-youtube-live-chat--side {
+                                height:100vh;
+                                display:flex;
+                                flex-direction:column;
+                            }
+                            .smartlearn-youtube-live-layout.layout_' . esc_attr($unique_id) . ' .smartlearn-youtube-live-chat--side iframe {
+                                flex:1;
+                                min-height:0;
+                            }
+                            .smartlearn-youtube-live-chat.is-pip {
+                                position:fixed !important;
+                                right:16px;
+                                bottom:16px;
+                                width:min(380px, calc(100vw - 24px));
+                                height:min(70vh, 560px) !important;
+                                z-index:99999;
+                                background:#fff;
+                                border-radius:12px;
+                                box-shadow:0 18px 40px rgba(0,0,0,.28);
+                                border:1px solid rgba(0,0,0,.1);
+                                padding:10px;
+                                box-sizing:border-box;
+                                margin:0 !important;
+                                display:flex;
+                                flex-direction:column;
+                            }
+                            .smartlearn-youtube-live-chat.is-pip iframe {
+                                flex:1;
+                                min-height:0;
+                            }
+                            @media (max-width: 991px) {
+                                .smartlearn-youtube-live-layout.layout_' . esc_attr($unique_id) . ' { grid-template-columns:1fr; gap:12px; }
+                                .smartlearn-youtube-live-layout.layout_' . esc_attr($unique_id) . ' .smartlearn-youtube-live-chat--side {
+                                    height:55vh;
+                                }
+                            }
+                            .smartlearn-youtube-live-layout.layout_' . esc_attr($unique_id) . ':fullscreen,
+                            .smartlearn-youtube-live-layout.layout_' . esc_attr($unique_id) . ':-webkit-full-screen {
+                                grid-template-columns:minmax(0, 1.7fr) minmax(320px, 1fr);
+                                height:100%;
+                                background:#000;
+                                padding:12px;
+                                box-sizing:border-box;
+                                margin:0;
+                            }
+                            .smartlearn-youtube-live-layout.layout_' . esc_attr($unique_id) . ':fullscreen .smartlearn-lesson-video.youtube_' . esc_attr($unique_id) . ',
+                            .smartlearn-youtube-live-layout.layout_' . esc_attr($unique_id) . ':-webkit-full-screen .smartlearn-lesson-video.youtube_' . esc_attr($unique_id) . ' {
+                                height:calc(100vh - 24px);
+                                padding-bottom:0;
+                                aspect-ratio:auto;
+                            }
+                            .smartlearn-youtube-live-layout.layout_' . esc_attr($unique_id) . ':fullscreen .smartlearn-youtube-live-chat,
+                            .smartlearn-youtube-live-layout.layout_' . esc_attr($unique_id) . ':-webkit-full-screen .smartlearn-youtube-live-chat {
+                                height:calc(100vh - 24px);
+                                margin-top:0;
+                            }
+                        </style>';
+                        if ( $show_side_chat ) {
+                            echo '<div class="smartlearn-youtube-live-layout layout_' . esc_attr( $unique_id ) . '">';
+                            echo '<div class="smartlearn-youtube-live-video-col">';
+                        }
+                        echo '<div class="smartlearn-lesson-video youtube_' . esc_attr($unique_id) . '">';
+
+                        if ( $youtube_protection_enabled ) {
+                            // Protected mode: disable direct interaction with YouTube iframe.
+                            echo '<iframe id="' . esc_attr($unique_id) . '" width="100%" height="100%" src="https://www.youtube.com/embed/' . esc_attr( $video_id ) . '?rel=0&modestbranding=1&controls=0&showinfo=0&iv_load_policy=3&disablekb=1&fs=1&enablejsapi=1&playsinline=1&playlist=' . esc_attr( $video_id ) . '" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen style="position:absolute; top:0; left:0; width:100%; height:100%; z-index:1; pointer-events:none;"></iframe>';
+
+                            echo '<div id="overlay-' . esc_attr($unique_id) . '" style="position:absolute; top:0; left:0; width:100%; height:100%; z-index:10; cursor:pointer; display:flex; align-items:center; justify-content:center; background:rgba(0,0,0,0.1); transition: 0.3s;">';
+                            echo '<div class="sl-play-btn" style="width:70px; height:70px; background:rgba(0,0,0,0.7); border-radius:50%; display:flex; align-items:center; justify-content:center; transition:0.3s;">';
+                            echo '<svg width="32" height="32" viewBox="0 0 24 24" fill="white" xmlns="http://www.w3.org/2000/svg"><path d="M8 5V19L19 12L8 5Z"/></svg>';
+                            echo '</div>';
+                            echo '</div>';
+                            echo '<button type="button" id="fs-btn-' . esc_attr( $unique_id ) . '" class="smartlearn-yt-fullscreen-btn fs_' . esc_attr( $unique_id ) . '">' . esc_html__( 'Весь екран', 'smartlearn-lms' ) . '</button>';
+                        } else {
+                            // Open mode: allow regular YouTube interactions and links.
+                            $embed_url = 'https://www.youtube.com/embed/' . rawurlencode( $video_id ) . '?rel=0&modestbranding=1&controls=1&fs=1&playsinline=1';
+                            echo '<iframe id="' . esc_attr($unique_id) . '" width="100%" height="100%" src="' . esc_url( $embed_url ) . '" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen style="position:absolute; top:0; left:0; width:100%; height:100%; z-index:1; pointer-events:auto;"></iframe>';
+                        }
+
+                        echo '</div>';
+                        if ( $show_side_chat ) {
+                            echo '</div>';
+                            self::render_youtube_live_chat( $video_id, true, $unique_id );
+                            echo '</div>';
+                        }
+
+                        if ( $youtube_protection_enabled ) {
+                            // Script to handle play/pause via YouTube API in protected mode.
+                            ?>
+                            <script>
+                                document.addEventListener("DOMContentLoaded", function() {
+                                    var iframe = document.getElementById("<?php echo esc_attr($unique_id); ?>");
+                                    var overlay = document.getElementById("overlay-<?php echo esc_attr($unique_id); ?>");
+                                    if (!iframe || !overlay) {
+                                        return;
+                                    }
+                                    var playBtn = overlay.querySelector('.sl-play-btn');
+                                    var fsBtn = document.getElementById("fs-btn-<?php echo esc_attr($unique_id); ?>");
+                                    var isPlaying = false;
+
+                                    overlay.addEventListener("click", function() {
+                                        if (isPlaying) {
+                                            iframe.contentWindow.postMessage('{"event":"command","func":"pauseVideo","args":""}', '*');
+                                            playBtn.innerHTML = '<svg width="32" height="32" viewBox="0 0 24 24" fill="white" xmlns="http://www.w3.org/2000/svg"><path d="M8 5V19L19 12L8 5Z"/></svg>';
+                                            isPlaying = false;
+                                            playBtn.style.opacity = '1';
+                                            overlay.style.background = 'rgba(0,0,0,0.1)';
+                                        } else {
+                                            iframe.contentWindow.postMessage('{"event":"command","func":"playVideo","args":""}', '*');
+                                            playBtn.innerHTML = '<svg width="32" height="32" viewBox="0 0 24 24" fill="white" xmlns="http://www.w3.org/2000/svg"><path d="M6 19H10V5H6V19ZM14 5V19H18V5H14Z"/></svg>';
+                                            isPlaying = true;
+                                            playBtn.style.opacity = '0';
+                                            overlay.style.background = 'transparent';
+                                        }
+                                    });
+
+                                    overlay.addEventListener("mouseenter", function() {
+                                        if (isPlaying) {
+                                            playBtn.style.opacity = '1';
+                                        }
+                                    });
+
+                                    overlay.addEventListener("mouseleave", function() {
+                                        if (isPlaying) {
+                                            playBtn.style.opacity = '0';
+                                        }
+                                    });
+
+                                    if (fsBtn) {
+                                        fsBtn.addEventListener("click", function(event) {
+                                            event.preventDefault();
+                                            event.stopPropagation();
+                                            var layout = iframe.closest('.smartlearn-youtube-live-layout');
+                                            var target = layout || iframe.closest('.smartlearn-lesson-video');
+                                            if (!target) {
+                                                return;
+                                            }
+                                            if (document.fullscreenElement) {
+                                                document.exitFullscreen();
+                                                return;
+                                            }
+                                            if (target.requestFullscreen) {
+                                                target.requestFullscreen();
+                                            } else if (target.webkitRequestFullscreen) {
+                                                target.webkitRequestFullscreen();
+                                            } else if (target.msRequestFullscreen) {
+                                                target.msRequestFullscreen();
+                                            }
+                                        });
+                                    }
+                                });
+                            </script>
+                            <?php
+                        }
+
+                        if ( $youtube_live_chat_enabled && ! $show_side_chat ) {
+                            self::render_youtube_live_chat( $video_id, false, $unique_id );
+                        }
+
+                        if ( $youtube_live_chat_enabled ) {
+                            ?>
+                            <script>
+                                document.addEventListener("DOMContentLoaded", function() {
+                                    var chat = document.getElementById("<?php echo esc_attr( 'sl-chat-' . preg_replace( '/[^a-zA-Z0-9_-]/', '', (string) $unique_id ) ); ?>");
+                                    var pipBtn = document.getElementById("<?php echo esc_attr( 'sl-chat-pip-btn-' . preg_replace( '/[^a-zA-Z0-9_-]/', '', (string) $unique_id ) ); ?>");
+                                    if (!chat || !pipBtn) {
+                                        return;
+                                    }
+                                    pipBtn.addEventListener("click", function() {
+                                        var isPip = chat.classList.toggle("is-pip");
+                                        pipBtn.textContent = isPip ? "Згорнути чат" : "Міні-чат";
+                                    });
+                                });
+                            </script>
+                            <?php
+                        }
+                    }
+                } elseif ( preg_match( '/vimeo\.com/', $video_url ) ) {
+                    preg_match( '/vimeo\.com\/(\d+)/', $video_url, $matches );
+                    if ( isset( $matches[1] ) ) {
+                        $video_id = $matches[1];
+                        echo '<div class="smartlearn-lesson-video vimeo">';
+                        echo '<iframe src="https://player.vimeo.com/video/' . esc_attr( $video_id ) . '" width="100%" height="500" frameborder="0" allow="autoplay; fullscreen; picture-in-picture" allowfullscreen></iframe>';
+                        echo '</div>';
+                    }
+                } else {
+                    // HTML5 fallback
+                    echo '<div class="smartlearn-lesson-video html5">';
+                    echo '<video width="100%" height="500" controls>';
+                    echo '<source src="' . esc_url( $video_url ) . '">';
+                    echo esc_html__( 'Ваш браузер не підтримує відео.', 'smartlearn-lms' );
+                    echo '</video>';
+                    echo '</div>';
+                }
+
+            } elseif ( 'upload' === $type && $value ) {
+                $attachment_id = intval( $value );
+                $src = wp_get_attachment_url( $attachment_id );
+                if ( $src ) {
+                    echo '<div class="smartlearn-lesson-video upload">';
+                    echo '<video width="100%" height="500" controls>';
+                    echo '<source src="' . esc_url( $src ) . '">';
+                    echo esc_html__( 'Ваш браузер не підтримує відео.', 'smartlearn-lms' );
+                    echo '</video>';
+                    echo '</div>';
+                }
+
+            } elseif ( 'text' === $type && $value ) {
+                echo '<div class="smartlearn-lesson-text">' . wp_kses_post( wpautop( $value ) ) . '</div>';
+            }
+        }
+
+        echo '</div>';
+    }
+    
+    /**
+     * Відобразити мета-інформацію курсу
+     */
+    public static function display_course_meta( $course_id ) {
+        $duration = get_post_meta( $course_id, '_smartlearn_course_duration', true );
+        $level = get_post_meta( $course_id, '_smartlearn_course_level', true );
+        $custom_author_name = trim( (string) get_post_meta( $course_id, '_smartlearn_course_instructor_name', true ) );
+        $author_id = (int) get_post_field( 'post_author', $course_id );
+        $fallback_author_name = $author_id ? get_the_author_meta( 'display_name', $author_id ) : '';
+        $author_name = '' !== $custom_author_name ? $custom_author_name : $fallback_author_name;
+        $lessons = self::get_course_lessons( $course_id );
+        $lessons_count = count( $lessons );
+        
+        if ( ! $duration && ! $level && ! $lessons_count && ! $author_name ) {
+            return;
+        }
+        
+        echo '<div class="smartlearn-course-meta">';
+        
+        if ( $level ) {
+            $level_labels = array(
+                'beginner' => __( 'Початковий', 'smartlearn-lms' ),
+                'intermediate' => __( 'Середній', 'smartlearn-lms' ),
+                'advanced' => __( 'Просунутий', 'smartlearn-lms' ),
+            );
+            $level_label = isset( $level_labels[ $level ] ) ? $level_labels[ $level ] : $level;
+            
+            echo '<div class="smartlearn-course-meta-item level">';
+            echo '<span class="label">' . __( 'Рівень:', 'smartlearn-lms' ) . '</span> ';
+            echo '<span class="value">' . esc_html( $level_label ) . '</span>';
+            echo '</div>';
+        }
+        
+        if ( $duration ) {
+            echo '<div class="smartlearn-course-meta-item duration">';
+            echo '<span class="label">' . __( 'Тривалість:', 'smartlearn-lms' ) . '</span> ';
+            echo '<span class="value">' . esc_html( $duration ) . '</span>';
+            echo '</div>';
+        }
+
+        if ( $author_name ) {
+            echo '<div class="smartlearn-course-meta-item author">';
+            echo '<span class="label">' . __( 'Автор курсу:', 'smartlearn-lms' ) . '</span> ';
+            echo '<span class="value">' . esc_html( $author_name ) . '</span>';
+            echo '</div>';
+        }
+        
+        if ( $lessons_count ) {
+            echo '<div class="smartlearn-course-meta-item lessons">';
+            echo '<span class="label">' . __( 'Уроків:', 'smartlearn-lms' ) . '</span> ';
+            echo '<span class="value">' . esc_html( $lessons_count ) . '</span>';
+            echo '</div>';
+        }
+
+        // Show current user's access expiry if available
+        $user_id = get_current_user_id();
+        if ( $user_id && class_exists( 'SmartLearn_LMS_Manual_Access' ) ) {
+            $expires = SmartLearn_LMS_Manual_Access::get_user_expires_at( $user_id, $course_id );
+            if ( $expires ) {
+                $label = ( $expires === SmartLearn_LMS_Manual_Access::LIFETIME_EXPIRES_AT ) ? __( 'Безстроково', 'smartlearn-lms' ) : $expires;
+                echo '<div class="smartlearn-course-meta-item access-expires">';
+                echo '<span class="label">' . __( 'Доступ дійсний до:', 'smartlearn-lms' ) . '</span> ';
+                echo '<span class="value">' . esc_html( $label ) . '</span>';
+                echo '</div>';
+            }
+        }
+        
+        echo '</div>';
+    }
+}
